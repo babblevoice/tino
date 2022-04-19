@@ -156,7 +156,7 @@ def complete_base_lines(base_lines_path, tree_src):
     (indent, source, number) = get_tag_values(base_line)
 
     if 'html' != source.split('.')[-1] or (check_file_list(base_lines_path.split('/')[-1]) and\
-      check_file_item(source.split('/')[-1])):
+      check_file_item(source.split('/')[-1])): # handling .list with .item in generate_list
       lines.append(base_line)
       continue
 
@@ -196,6 +196,44 @@ def generate_pages(page_base_path, tree_src):
       tree_src = write_by_path(tree_src, page_path, page_lines)
 
   delete_by_path(tree_src, page_base_path)
+  return tree_src
+
+def generate_list(list_base_path, tree_src):
+
+  list_subpath = get_subpath(list_base_path)
+  tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
+
+  list_base_lines = read_by_path(tree_src, list_base_path)
+  lines = []
+  tag_line_index = 0
+  tag_line = ''
+
+  for base_line, i in zip(list_base_lines, range(len(list_base_lines))):
+    if tag not in base_line: lines.append(base_line); continue
+    tag_line_index = i
+    tag_line = base_line
+
+  (indent, source, number) = get_tag_values(tag_line) # number taken as number per list page
+
+  partials_file = read_by_path(tree_src['partials'], source)
+  if not partials_file: raise KeyError(f'No partial for {source}')
+
+  content_filenames = list(filter(lambda key: check_file_md(key), list(tree_src_lvl.keys())))
+  list_pages_required = len(content_filenames) // number + 1
+  list_page_names = [f'page-{str(n + 1)}.html' for n in range(list_pages_required)]
+
+  partial_lines = read_by_path(tree_src['partials'], source)
+
+  for i in range(len(list_page_names)):
+
+    offset = i * number
+    list_page_items = generate_items(partial_lines, tree_src['content'], source, number, offset)
+
+    list_page_lines = [*lines[0:tag_line_index], *[get_with_indent(line, indent) for line in list_page_items], *lines[tag_line_index:]]
+    list_page_path = get_source_path('static', list_subpath, list_page_names[i])
+    tree_src = write_by_path(tree_src, list_page_path, list_page_lines)
+
+  delete_by_path(tree_src, list_base_path)
   return tree_src
 
 # define key tasks
@@ -242,6 +280,8 @@ def include_content(tree_src, root = '.'):
       continue
     if check_file_page(item_name):
       tree_src = generate_pages(item_path, tree_src)
+    if check_file_list(item_name):
+      tree_src = generate_list(item_path, tree_src)
   return tree_src
 
 def output_static(tree_src, root = 'static'):
