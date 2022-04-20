@@ -3,6 +3,8 @@
 # - standard library
 from sys import argv
 from os import system, listdir, mkdir, path
+from functools import reduce
+from operator import itemgetter
 from copy import deepcopy
 
 # - external library
@@ -99,29 +101,31 @@ def get_page_path(content_path):
   page_filename = '.'.join([*content_path_parts[-1].split('.')[0:-1], 'html'])
   return '/'.join([page_subpath, page_filename])
 
+def extract_content(acc, line):
+  line_stripped = line.strip()
+  if '' == line_stripped: return acc
+  if '---' == line_stripped:
+    if not acc['in_head']: acc['in_head'] = True; return acc
+    acc['in_head'] = False; return acc
+  if acc['in_head']:
+    [key_raw, value_raw] = line.split(':')
+    acc['pairs'][key_raw.strip()] = value_raw.strip().replace('"', '')
+  else:
+    acc['lines_body'].append(line)
+  return acc
+
 def format_content(content_path, tree_src):
-
-  pairs = {}
-  lines_body = []
-  is_meta = False
-
-  tree_src_lvl = read_by_path(tree_src, content_path)
-
-  for line in tree_src_lvl:
-    line_stripped = line.strip()
-    if '' == line_stripped: continue
-    if '---' == line_stripped:
-      if not is_meta: is_meta = True; continue
-      is_meta = False; continue
-    if is_meta:
-      [key_raw, value_raw] = line.split(':')
-      pairs[key_raw.strip()] = value_raw.strip().replace('"', '')
-    else:
-      lines_body.append(line)
+  cache_in = {
+    'in_head': False,
+    'lines_body': [],
+    'pairs': {}
+  }
+  content_file = read_by_path(tree_src, content_path)
+  cache_out = reduce(extract_content, content_file, cache_in)
+  lines_body, pairs = itemgetter('lines_body', 'pairs')(cache_out)
 
   pairs['body'] = list(map(lambda line: markdown(line) + '\n', lines_body))
   pairs['href'] = get_page_path(content_path)
-
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
 
@@ -156,7 +160,7 @@ def generate_items(base_lines, content_dir, source, number = None, offset = 0):
     lines.extend(populate_lines(base_lines, content_file[1], content_file[0]))
   return lines
 
-def complete_base_lines(base_lines_path, tree_src):
+def complete_base(base_lines_path, tree_src):
 
   base_lines = read_by_path(tree_src, base_lines_path)
   lines = []
@@ -174,7 +178,7 @@ def complete_base_lines(base_lines_path, tree_src):
     partials_file = read_by_path(tree_src['partials'], source)
     if not partials_file: raise KeyError(f'No partial for {source}')
 
-    tree_src = complete_base_lines(get_source_path('partials', source), tree_src) # recurse
+    tree_src = complete_base(get_source_path('partials', source), tree_src) # recurse
 
     base_lines_complete = read_by_path(tree_src['partials'], source)
     base_lines_multiplied = generate_items(base_lines_complete, tree_src['content'], source, number)\
@@ -191,7 +195,6 @@ def generate_pages(page_base_path, tree_src):
   tree_src_lvl = read_by_path(tree_src['content'], page_subpath)
 
   for page_content_name in tree_src_lvl:
-
     if check_file_md(page_content_name):
 
       page_base_lines = read_by_path(tree_src, page_base_path)
@@ -205,33 +208,33 @@ def generate_pages(page_base_path, tree_src):
   delete_by_path(tree_src, page_base_path)
   return tree_src
 
+list_pairs = {
+  'first':     lambda names, i: names[0],
+  'prev-more': lambda names, i: '' if i - 2 < 0 else str(0 + i - 1),
+  'prev':      lambda names, i: '' if i - 1 < 0 else names[i - 1],
+  'prev-n':    lambda names, i: '' if i - 1 < 0 else str(i),
+  'this':      lambda names, i: names[i],
+  'this-n':    lambda names, i: str(i + 1),
+  'next':      lambda names, i: '' if i + 1 >= len(names) else names[i + 1],
+  'next-n':    lambda names, i: '' if i + 1 >= len(names) else str(i + 2),
+  'next-more': lambda names, i: '' if i + 2 >= len(names) else str(len(names) - i - 2),
+  'last':      lambda names, i: names[-1]
+}
+
 def generate_list(list_base_path, tree_src):
 
   list_subpath = get_subpath(list_base_path)
   tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
 
-  list_page_pairs = {
-    'first': lambda names, i: names[0],
-    'last': lambda names, i: names[-1],
-    'prev': lambda names, i: '' if i - 1 < 0 else names[i - 1],
-    'this': lambda names, i: names[i],
-    'next': lambda names, i: '' if i + 1 >= len(names) else names[i + 1],
-    'prev-n': lambda names, i: '' if i - 1 < 0 else str(i),
-    'this-n': lambda names, i: str(i + 1),
-    'next-n': lambda names, i: '' if i + 1 >= len(names) else str(i + 2),
-    'prev-more': lambda names, i: '' if i - 2 < 0 else str(0 + i - 1),
-    'next-more': lambda names, i: '' if i + 2 >= len(names) else str(len(names) - i - 2)
-  }
-  list_page_keys = list_page_pairs.keys()
-
   list_base_lines = read_by_path(tree_src, list_base_path)
-  lines = []
+  list_pair_keys = list_pairs.keys()
   tag_data = {}
+  lines = []
 
   for base_line, i in zip(list_base_lines, range(len(list_base_lines))):
     if tag not in base_line: lines.append(base_line); continue
     tag_values = get_tag_values(base_line)
-    if tag_values[1] not in list_page_keys:
+    if tag_values[1] not in list_pair_keys:
       tag_data = {'index': i, 'values': tag_values}
       continue
     lines.append(base_line)
@@ -254,7 +257,7 @@ def generate_list(list_base_path, tree_src):
 
     list_page_lines = [*lines[0:tag_data['index']], *[get_with_indent(line, indent) for line in list_page_items], *lines[tag_data['index']:]]
 
-    list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in list_page_pairs.items()))
+    list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in list_pairs.items()))
     list_page_lines = populate_lines(list_page_lines, list_page_pairs_i, list_base_path)
 
     list_page_path = get_source_path('static', list_subpath, list_page_names[i])
@@ -294,7 +297,7 @@ def insert_partials(tree_src, root = '.'):
       tree_src = insert_partials(tree_src, item_path) # recurse
       continue
     if check_file_html(item_name):
-      tree_src = complete_base_lines(item_path, tree_src)
+      tree_src = complete_base(item_path, tree_src)
   return tree_src
 
 def include_content(tree_src, root = '.'):
