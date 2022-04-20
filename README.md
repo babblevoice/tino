@@ -4,22 +4,19 @@ Provisionally named work in progress.
 
 ## Goal
 
-Replicate a website source directory, generating complete HTML files from various base and partial files, including item templates populated with content file head data and body text, and saving to an output directory.
+Replicate a website source directory, generating complete HTML files from content, base and partial files, including item templates populated with content file values and paginated list templates, and saving to an output directory.
 
 ## Done
 
-- recursive insertion of:
-  - partials into HTML files using the `<== partial.html [n]` syntax, for an arbitrarily deep partials tree
-  - content file values into static .page templates using the `<== key` syntax, for an arbitrarily deep content tree
-  - content file values into partials .item templates using the `<== key` syntax, for an arbitrarily deep content tree, excl. href value and for ordering by date descending only
-- generation of paginated content lists based on .list templates, excl. links
+- recursive insertion, for arbitrarily deep trees, of:
+  - partials into HTML files using the `<== partial.html [n]` syntax
+  - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
+- generation of paginated content lists based on `.list` templates, incl. population with pagination values
 - static file save to default output directory, for an arbitrarily deep static tree
 
 ## Todo
 
-- implement href and related insertions for templates
 - extend to support tags
-- add Markdown parsing
 - upgrade to live serving
 - memo updated filenames
 - refactor
@@ -46,11 +43,31 @@ Specifically:
 - any HTML file in partials/ with a name of the form type.item.description.html is a template to be populated with values from the content subdirectory of that type, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item
 - any HTML file in static/ with a name of the form type.list.html is a template to be completed with the content of one `.item` file in partials/, each `.item` generated once per file in the content subdirectory of that type, e.g. blog.news.list.html relates to files in content/blog/news/; one output file is to be generated per page of the paginated list, each currently named `page-` plus the page number, e.g. content/blog/news/page-1.html for the first
 
+### Additional values
+
+The following value is available for use in `.item` templates:
+
+- `href` - the href of the output file
+
+The following values are available for use in `.list` templates for the purpose of populating control elements:
+
+- `first` - the href of the output file for the first list page of the set
+- `last` - the href of the output file for the last list page of the set
+- `prev` - the href of the output file for the previous list page in the set
+- `this` - the href of the output file for the current list page
+- `next` - the href of the output file for the next list page in the set
+- `prev-n` - the number of the previous list page in the set
+- `this-n` - the number of the current list page
+- `next-n` - the number of the next list page in the set
+- `prev-more` - the number of list pages before `prev-n`
+- `next-more` - the number of list pages after `next-n`
+
 ## Requirements
 
 The following dependencies are used:
 
 - Python 3
+- [Python-Markdown](https://github.com/Python-Markdown/markdown)
 
 The tino root directory requires the three default source directories - content/, partials/ and static/.
 
