@@ -121,6 +121,7 @@ def format_content(content_path, tree_src):
 
   pairs['body'] = ''.join(lines_body)
   pairs['href'] = get_page_path(content_path)
+
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
 
@@ -138,8 +139,9 @@ def populate_lines(base_lines, content_file, content_path):
     if tag not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
     if source not in list(content_file.keys()): raise KeyError(f'No {source} for {content_path}')
-    source_value = content_file[source] if '\n' == content_file[source][-1] else content_file[source] + '\n'
-    lines.append(get_with_indent(source_value, indent))
+    source_value = content_file[source]
+    source_line = source_value if source_value and '\n' == source_value[-1] else source_value + '\n' if source_value else ''
+    if source_line: lines.append(get_with_indent(source_line, indent))
   return lines
 
 def generate_items(base_lines, content_dir, source, number = None, offset = 0):
@@ -207,17 +209,33 @@ def generate_list(list_base_path, tree_src):
   list_subpath = get_subpath(list_base_path)
   tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
 
+  list_page_pairs = {
+    'first': lambda names, i: names[0],
+    'last': lambda names, i: names[-1],
+    'prev': lambda names, i: '' if i - 1 < 0 else names[i - 1],
+    'this': lambda names, i: names[i],
+    'next': lambda names, i: '' if i + 1 >= len(names) else names[i + 1],
+    'prev-n': lambda names, i: '' if i - 1 < 0 else str(i),
+    'this-n': lambda names, i: str(i + 1),
+    'next-n': lambda names, i: '' if i + 1 >= len(names) else str(i + 2),
+    'prev-more': lambda names, i: '' if i - 2 < 0 else str(0 + i - 1),
+    'next-more': lambda names, i: '' if i + 2 >= len(names) else str(len(names) - i - 2)
+  }
+  list_page_keys = list_page_pairs.keys()
+
   list_base_lines = read_by_path(tree_src, list_base_path)
   lines = []
-  tag_line_index = 0
-  tag_line = ''
+  tag_data = {}
 
   for base_line, i in zip(list_base_lines, range(len(list_base_lines))):
     if tag not in base_line: lines.append(base_line); continue
-    tag_line_index = i
-    tag_line = base_line
+    tag_values = get_tag_values(base_line)
+    if tag_values[1] not in list_page_keys:
+      tag_data = {'index': i, 'values': tag_values}
+      continue
+    lines.append(base_line)
 
-  (indent, source, number) = get_tag_values(tag_line) # number taken as number per list page
+  (indent, source, number) = tag_data['values'] # number taken as number per list page
 
   partials_file = read_by_path(tree_src['partials'], source)
   if not partials_file: raise KeyError(f'No partial for {source}')
@@ -233,7 +251,11 @@ def generate_list(list_base_path, tree_src):
     offset = i * number
     list_page_items = generate_items(partial_lines, tree_src['content'], source, number, offset)
 
-    list_page_lines = [*lines[0:tag_line_index], *[get_with_indent(line, indent) for line in list_page_items], *lines[tag_line_index:]]
+    list_page_lines = [*lines[0:tag_data['index']], *[get_with_indent(line, indent) for line in list_page_items], *lines[tag_data['index']:]]
+
+    list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in list_page_pairs.items()))
+    list_page_lines = populate_lines(list_page_lines, list_page_pairs_i, list_base_path)
+
     list_page_path = get_source_path('static', list_subpath, list_page_names[i])
     tree_src = write_by_path(tree_src, list_page_path, list_page_lines)
 
