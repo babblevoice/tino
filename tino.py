@@ -6,7 +6,7 @@ from os import system, listdir, mkdir, path
 from copy import deepcopy
 
 # - external library
-#
+from markdown import markdown
 
 # configure project
 tag = '<=='
@@ -119,7 +119,7 @@ def format_content(content_path, tree_src):
     else:
       lines_body.append(line)
 
-  pairs['body'] = ''.join(lines_body)
+  pairs['body'] = list(map(lambda line: markdown(line) + '\n', lines_body))
   pairs['href'] = get_page_path(content_path)
 
   tree_src = write_by_path(tree_src, content_path, pairs)
@@ -140,6 +140,7 @@ def populate_lines(base_lines, content_file, content_path):
     (indent, source, number) = get_tag_values(base_line)
     if source not in list(content_file.keys()): raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
+    if list == type(source_value): lines.extend(list(map(lambda line: get_with_indent(line, indent), source_value))); continue
     source_line = source_value if source_value and '\n' == source_value[-1] else source_value + '\n' if source_value else ''
     if source_line: lines.append(get_with_indent(source_line, indent))
   return lines
