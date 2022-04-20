@@ -93,6 +93,12 @@ def prime_workflow(*functions):
 
 # define processors
 
+def get_page_path(content_path):
+  content_path_parts = content_path.split('/')
+  page_subpath = '/'.join(content_path_parts[1:-1])
+  page_filename = '.'.join([*content_path_parts[-1].split('.')[0:-1], 'html'])
+  return '/'.join([page_subpath, page_filename])
+
 def format_content(content_path, tree_src):
 
   pairs = {}
@@ -109,11 +115,12 @@ def format_content(content_path, tree_src):
       is_meta = False; continue
     if is_meta:
       [key_raw, value_raw] = line.split(':')
-      pairs[key_raw.strip()] = value_raw.strip().replace('"', '') + '\n'
+      pairs[key_raw.strip()] = value_raw.strip().replace('"', '')
     else:
       lines_body.append(line)
 
   pairs['body'] = ''.join(lines_body)
+  pairs['href'] = get_page_path(content_path)
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
 
@@ -131,7 +138,8 @@ def populate_lines(base_lines, content_file, content_path):
     if tag not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
     if source not in list(content_file.keys()): raise KeyError(f'No {source} for {content_path}')
-    lines.append(get_with_indent(content_file[source], indent))
+    source_value = content_file[source] if '\n' == content_file[source][-1] else content_file[source] + '\n'
+    lines.append(get_with_indent(source_value, indent))
   return lines
 
 def generate_items(base_lines, content_dir, source, number = None, offset = 0):
@@ -174,10 +182,6 @@ def complete_base_lines(base_lines_path, tree_src):
   tree_src = write_by_path(tree_src, base_lines_path, lines)
   return tree_src
 
-def get_page_path(page_base_path, page_content_path):
-  page_name = ''.join(page_content_path.split('.')[0:-1]) + '.html'
-  return get_source_path('/'.join(page_base_path.split('/')[0:-1]), page_name)
-
 def generate_pages(page_base_path, tree_src):
 
   page_subpath = get_subpath(page_base_path)
@@ -192,8 +196,8 @@ def generate_pages(page_base_path, tree_src):
       page_content = read_by_path(tree_src['content'], page_content_path)
 
       page_lines = populate_lines(page_base_lines, page_content, page_content_path)
-      page_path = get_page_path(page_base_path, page_content_path)
-      tree_src = write_by_path(tree_src, page_path, page_lines)
+      page_path = tree_src_lvl[page_content_name]['href']
+      tree_src = write_by_path(tree_src, 'static/' + page_path, page_lines)
 
   delete_by_path(tree_src, page_base_path)
   return tree_src
