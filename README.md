@@ -2,9 +2,20 @@
 
 Provisionally named work in progress.
 
+- [Goal](#goal)
+- [Done](#done)
+- [Todo](#todo)
+- [Code](#code)
+  - [Organisation](#organisation)
+    - [Inclusion](#inclusion)
+    - [Templates](#templates)
+  - [Requirements](#requirements)
+  - [CLI commands](#cli-commands)
+  - [Notes](#notes)
+
 ## Goal
 
-Replicate a website source directory, generating complete HTML files from content, base and partial files, including item templates populated with content file values and paginated list templates, and saving to an output directory.
+Generate a website from a set of three source directories, producing complete HTML files from content, base and partial files, including item templates populated with content file values and paginated list templates, and saving to an output directory, with no config files required.
 
 ## Done
 
@@ -16,20 +27,38 @@ Replicate a website source directory, generating complete HTML files from conten
 
 ## Todo
 
-- extend to support tags
+- extend to support tags, incl. tag list pages using the `.tags.list` template, outputting to a tags/ subdirectory for the content type
 - upgrade to live serving
+- revise remaining commands to equivalent Python method calls
 - memo updated filenames
-- refactor
+- refactor and comment
 
-## Organisation
+## Code
+
+### Organisation
 
 Default source directory structure:
 
-- static/, for base HTML files marked with the locations at which partials and content head data or body text is to be inserted
-- content/, for content files containing head data and body text, organised as an arbitrarily deep tree by type, e.g. blog/, docs/, initially for files written in Markdown
+- static/, for base HTML files marked with the locations at which partials and content head data or body text is to be inserted, with all images stored in static/assets/
+- content/, for content files containing head data and body text, organised as an arbitrarily deep tree by type, e.g. blog/, docs/, initially for files written in Markdown, with all images stored in content/images
 - partials/, for HTML files to be inserted into other HTML files, including other partial files
 
-### Templates
+#### Inclusion
+
+Default inclusion syntax:
+
+- in all HTML files: `<== partial.html [n]`, i.e. insert partial.html here, once or n times
+- in HTML `.page` and `.item` templates: `<== key`, i.e. insert the given value from the content file here, using the key `body` for content file body text
+
+For example:
+
+```html
+<ul>
+  <== blog.news.item.li.html 5
+</ul>
+```
+
+#### Templates
 
 Available template types:
 
@@ -43,7 +72,7 @@ Specifically:
 - any HTML file in partials/ with a name of the form type.item.description.html is a template to be populated with values from the content subdirectory of that type, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item
 - any HTML file in static/ with a name of the form type.list.html is a template to be completed with the content of one `.item` file in partials/, each `.item` generated once per file in the content subdirectory of that type, e.g. blog.news.list.html relates to files in content/blog/news/; one output file is to be generated per page of the paginated list, each currently named `page-` plus the page number, e.g. content/blog/news/page-1.html for the first
 
-### Additional values
+##### Additional values
 
 The following value is available for use in `.item` templates:
 
@@ -62,7 +91,7 @@ The following values are available for use in `.list` templates for the purpose 
 - `prev-more` - the number of list pages before `prev-n`
 - `next-more` - the number of list pages after `next-n`
 
-## Requirements
+### Requirements
 
 The following dependencies are used:
 
@@ -71,27 +100,25 @@ The following dependencies are used:
 
 The tino root directory requires the three default source directories - content/, partials/ and static/.
 
-## Generation
+Once complete, all files in the static/ directory are copied into the default output directory public/.
 
-Default inclusion syntax:
-
-- in all HTML files: `<== partial.html [n]`, i.e. insert partial.html here, once or n times
-- in HTML `.page` and `.item` templates: `<== key`, i.e. insert the given value from the content file here, using the key `body` for content file body text
-
-For example:
-
-```html
-<ul>
-  <== blog.news.item.li.html 5
-</ul>
-```
-
-Once complete, all files in the static/ directory are copied into the default output directory dist/.
-
-## CLI commands
+### CLI commands
 
 The main file can be run for the default behaviour with the command `python3 tino.py`.
 
-### Development
+#### Development
 
 A development server listening at `localhost:8000` can be run with the command `python3 tino.py server`.
+
+##### Options
+
+- `--exclude-content` - do not load content files and pass any templates unpopulated to the output directory
+
+### Notes
+
+- dot-prefixed files are not loaded
+
+#### Pre-release
+
+- ensure existing site section URLs valid
+- ensure existing site images used also by apps remain or are relocated
