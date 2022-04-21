@@ -1,7 +1,7 @@
 # include global dependencies
 
 # - standard library
-from sys import argv
+from sys import argv, exit
 from os import system, listdir, mkdir, path
 from functools import reduce
 from operator import itemgetter
@@ -12,12 +12,15 @@ from markdown import markdown
 
 # configure project
 tag = '<=='
-out = 'dist'
+out = 'public'
 
 # handle arguments
 if 'server' in argv:
   print(f'View site at localhost:8000 | Press Ctrl+C here to stop')
   system(f'python3 -m http.server -d {out}')
+  exit()
+
+exclude_content = True if '--exclude-content' in argv else False
 
 # define utilities
 
@@ -74,7 +77,7 @@ def delete_by_path(d, p):
   delete_by_path(d[path_parts[0]], '/'.join(path_parts[1:]))
 
 def get_with_indent(line, size):
-  return ' ' * size + line
+  return line if '' == line.strip() else ' ' * size + line
 
 def ensure_out_dir(subdir = None):
   out_path = out if subdir is None else out + '/' + subdir
@@ -108,7 +111,9 @@ def extract_content(acc, line):
     if not acc['in_head']: acc['in_head'] = True; return acc
     acc['in_head'] = False; return acc
   if acc['in_head']:
-    [key_raw, value_raw] = line.split(':')
+    line_parts_raw = line.split(':')
+    line_parts = [line_parts_raw[0], ':'.join(line_parts_raw[1:])]
+    [key_raw, value_raw] = line_parts
     acc['pairs'][key_raw.strip()] = value_raw.strip().replace('"', '')
   else:
     acc['lines_body'].append(line)
@@ -182,7 +187,7 @@ def complete_base(base_lines_path, tree_src):
 
     base_lines_complete = read_by_path(tree_src['partials'], source)
     base_lines_multiplied = generate_items(base_lines_complete, tree_src['content'], source, number)\
-      if check_file_item(source.split('/')[-1]) else base_lines_complete * number
+      if not exclude_content and check_file_item(source.split('/')[-1]) else base_lines_complete * number
 
     lines.extend([get_with_indent(line, indent) for line in base_lines_multiplied])
 
@@ -224,6 +229,7 @@ list_pairs = {
 def generate_list(list_base_path, tree_src):
 
   list_subpath = get_subpath(list_base_path)
+
   tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
 
   list_base_lines = read_by_path(tree_src, list_base_path)
@@ -271,6 +277,9 @@ def generate_list(list_base_path, tree_src):
 def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
   tree_src = {}
   for item_name in dirs:
+    if 'content' == item_name and exclude_content: continue
+    if item_name in ['assets', 'images']: continue
+    if '.' == item_name[0]: continue
     item_path = get_source_path(root, item_name)
     if path.isdir(item_path):
       tree_src[item_name] = get_source_tree(listdir(item_path), item_path) # recurse
@@ -279,6 +288,7 @@ def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
   return tree_src
 
 def prepare_content(tree_src, root = 'content'):
+  if exclude_content: return tree_src
   tree_src_lvl = read_by_path(tree_src, root)
   for item_name in tree_src_lvl:
     item_path = get_source_path(root, item_name)
@@ -301,6 +311,7 @@ def insert_partials(tree_src, root = '.'):
   return tree_src
 
 def include_content(tree_src, root = '.'):
+  if exclude_content: return tree_src
   tree_src_copy = deepcopy(tree_src) # allow for dict size change on iteration
   tree_src_lvl = tree_src_copy if '.' == root else read_by_path(tree_src_copy, get_source_path(root))
   for item_name in tree_src_lvl:
@@ -314,8 +325,14 @@ def include_content(tree_src, root = '.'):
       tree_src = generate_list(item_path, tree_src)
   return tree_src
 
+def init_output_dir():
+  ensure_out_dir()
+  system('mkdir dist/assets && cp -r static/assets/* dist/assets/')
+  if exclude_content: return
+  system('mkdir dist/images && ln -s content/images/* dist/images/')
+
 def output_static(tree_src, root = 'static'):
-  if 'static' == root: ensure_out_dir()
+  if 'static' == root: init_output_dir()
   tree_src_lvl = read_by_path(tree_src, root)
   for item_name in tree_src_lvl:
     item_path = '/'.join([*root.split('/')[1:], item_name])
