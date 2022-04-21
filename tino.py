@@ -2,7 +2,7 @@
 
 # - standard library
 from sys import argv, exit
-from os import system, listdir, mkdir, path
+from os import system, listdir, mkdir, path, sep
 from functools import reduce
 from operator import itemgetter
 from copy import deepcopy
@@ -29,9 +29,7 @@ def get_source_file(path):
     return f.readlines()
 
 def get_source_path(root, *parts):
-  rel_path_raw = '/'.join(parts) if root in ['', '.'] else root + '/' + '/'.join(parts)
-  rel_path = rel_path_raw if '/' != rel_path_raw[-1] else rel_path_raw[0:-1]
-  return rel_path
+  return path.join(root if '.' != root[0] else root.lstrip('.'), *parts)
 
 def check_file_type(ext):
   return lambda filename: ext == filename.split('.')[-1]
@@ -50,42 +48,42 @@ check_file_item = check_file_role('item', -3)
 check_file_list = check_file_role('list')
 
 def get_subpath(p, stop = -2): # default stop value for .page and .list; -3 for .item
-  filename = p.split('/')[-1]
+  filename = p.split(sep)[-1]
   filename_parts = filename.split('.')
-  return '/'.join(filename_parts[0:stop])
+  return sep.join(filename_parts[0:stop])
 
 def read_by_path(d, p):
-  path_parts = p.split('/')
+  path_parts = p.split(sep)
   if 1 == len(path_parts):
     return d[path_parts[0]]
-  return read_by_path(d[path_parts[0]], '/'.join(path_parts[1:]))
+  return read_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
 
 def write_by_path(d, p, value):
-  path_parts = p.split('/')
+  path_parts = p.split(sep)
   if 1 == len(path_parts):
     d[path_parts[0]] = value
     return d
   if path_parts[0] not in d: d[path_parts[0]] = {}
-  d[path_parts[0]] = write_by_path(d[path_parts[0]], '/'.join(path_parts[1:]), value)
+  d[path_parts[0]] = write_by_path(d[path_parts[0]], sep.join(path_parts[1:]), value)
   return d
 
 def delete_by_path(d, p):
-  path_parts = p.split('/')
+  path_parts = p.split(sep)
   if 1 == len(path_parts):
     del d[path_parts[0]]
     return
-  delete_by_path(d[path_parts[0]], '/'.join(path_parts[1:]))
+  delete_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
 
 def get_with_indent(line, size):
   return line if '' == line.strip() else ' ' * size + line
 
 def ensure_out_dir(subdir = None):
-  out_path = out if subdir is None else out + '/' + subdir
+  out_path = out if subdir is None else get_source_path(out, subdir)
   if not path.exists(out_path):
     mkdir(out_path)
 
 def output_lines(filename, content):
-  with open(out + '/' + filename, 'w') as f:
+  with open(get_source_path(out, filename), 'w') as f:
     f.write(content)
 
 def prime_workflow(*functions):
@@ -99,10 +97,10 @@ def prime_workflow(*functions):
 # define processors
 
 def get_page_path(content_path):
-  content_path_parts = content_path.split('/')
-  page_subpath = '/'.join(content_path_parts[1:-1])
+  content_path_parts = content_path.split(sep)
+  page_subpath = sep.join(content_path_parts[1:-1])
   page_filename = '.'.join([*content_path_parts[-1].split('.')[0:-1], 'html'])
-  return '/'.join([page_subpath, page_filename])
+  return sep.join([page_subpath, page_filename])
 
 def extract_content(acc, line):
   line_stripped = line.strip()
@@ -175,8 +173,8 @@ def complete_base(base_lines_path, tree_src):
     if tag not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
 
-    if 'html' != source.split('.')[-1] or (check_file_list(base_lines_path.split('/')[-1]) and\
-      check_file_item(source.split('/')[-1])): # handling .list with .item in generate_list
+    if 'html' != source.split('.')[-1] or (check_file_list(base_lines_path.split(sep)[-1]) and\
+      check_file_item(source.split(sep)[-1])): # handling .list with .item in generate_list
       lines.append(base_line)
       continue
 
@@ -187,7 +185,7 @@ def complete_base(base_lines_path, tree_src):
 
     base_lines_complete = read_by_path(tree_src['partials'], source)
     base_lines_multiplied = generate_items(base_lines_complete, tree_src['content'], source, number)\
-      if not exclude_content and check_file_item(source.split('/')[-1]) else base_lines_complete * number
+      if not exclude_content and check_file_item(source.split(sep)[-1]) else base_lines_complete * number
 
     lines.extend([get_with_indent(line, indent) for line in base_lines_multiplied])
 
@@ -208,7 +206,7 @@ def generate_pages(page_base_path, tree_src):
 
       page_lines = populate_lines(page_base_lines, page_content, page_content_path)
       page_path = tree_src_lvl[page_content_name]['href']
-      tree_src = write_by_path(tree_src, 'static/' + page_path, page_lines)
+      tree_src = write_by_path(tree_src, get_source_path('static', page_path), page_lines)
 
   delete_by_path(tree_src, page_base_path)
   return tree_src
@@ -327,15 +325,15 @@ def include_content(tree_src, root = '.'):
 
 def init_output_dir():
   ensure_out_dir()
-  system('mkdir dist/assets && cp -r static/assets/* dist/assets/')
+  system(f'mkdir {out}/assets && cp -r static/assets/* {out}/assets/')
   if exclude_content: return
-  system('mkdir dist/images && ln -s content/images/* dist/images/')
+  system(f'mkdir {out}/images && ln -s content/images/* {out}/images/')
 
 def output_static(tree_src, root = 'static'):
   if 'static' == root: init_output_dir()
   tree_src_lvl = read_by_path(tree_src, root)
   for item_name in tree_src_lvl:
-    item_path = '/'.join([*root.split('/')[1:], item_name])
+    item_path = sep.join([*root.split(sep)[1:], item_name])
     if dict == type(tree_src_lvl[item_name]) and not check_file_md(item_name):
       ensure_out_dir(item_path)
       output_static(tree_src, get_source_path(root, item_name)) # recurse
