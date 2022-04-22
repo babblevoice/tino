@@ -80,7 +80,10 @@ def get_with_indent(line, size):
 def ensure_out_dir(subdir = None):
   out_path = out if subdir is None else get_source_path(out, subdir)
   if not path.exists(out_path):
-    mkdir(out_path)
+    try:
+      mkdir(out_path)
+    except FileExistsError:
+      pass
 
 def output_lines(filename, content):
   with open(get_source_path(out, filename), 'w') as f:
@@ -325,9 +328,11 @@ def include_content(tree_src, root = '.'):
 
 def init_output_dir():
   ensure_out_dir()
-  system(f'mkdir {out}/assets && cp -r static/assets/* {out}/assets/')
+  ensure_out_dir('assets')
+  system(f'cp -r static/assets/* {out}/assets/')
   if exclude_content: return
-  system(f'mkdir {out}/images && ln -s content/images/* {out}/images/')
+  ensure_out_dir('images')
+  system(f'cp -r content/images/* {out}/images/') #ln -s content/images/* {out}/images/')
 
 def output_static(tree_src, root = 'static'):
   if 'static' == root: init_output_dir()
