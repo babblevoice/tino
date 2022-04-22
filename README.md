@@ -6,6 +6,7 @@ Provisionally named work in progress.
 - [Done](#done)
 - [Todo](#todo)
 - [Code](#code)
+  - [Overview](#overview)
   - [Organisation](#organisation)
     - [Inclusion](#inclusion)
     - [Templates](#templates)
@@ -34,6 +35,12 @@ Generate a website from a set of three source directories, producing complete HT
 - refactor and comment
 
 ## Code
+
+### Overview
+
+The current code when run from a project directory (see [Organisation](#organisation) below) will replicate the structure of the static/ directory in the output directory (public/ by default), with any base HTML files which contain partial inclusion syntax (see [Inclusion](#inclusion) below) extended using the relevant partial files.
+
+If the site is to include content categories, e.g. blog, docs, with pages populated from Markdown files, the relevant content files are placed in a content/ directory in appropriately named subdirectories, e.g. content/blog/, content/docs/, and the appropriate templates are used (see [Templates](#templates) below).
 
 ### Organisation
 
@@ -74,17 +81,19 @@ Specifically:
 
 ##### Additional values
 
-The following value is available for use in `.item` templates:
+The following values are available for use in `.item` templates:
 
-- `href` - the href of the output file
+- `image` - the URL of the first image on its own line in the body of the content file
+- `intro` - the first non-heading, non-image line of the body of the content file
+- `href` - the URL of the output file
 
 The following values are available for use in `.list` templates for the purpose of populating control elements:
 
-- `first` - the href of the output file for the first list page of the set
-- `last` - the href of the output file for the last list page of the set
-- `prev` - the href of the output file for the previous list page in the set
-- `this` - the href of the output file for the current list page
-- `next` - the href of the output file for the next list page in the set
+- `first` - the URL of the output file for the first list page of the set
+- `last` - the URL of the output file for the last list page of the set
+- `prev` - the URL of the output file for the previous list page in the set
+- `this` - the URL of the output file for the current list page
+- `next` - the URL of the output file for the next list page in the set
 - `prev-n` - the number of the previous list page in the set
 - `this-n` - the number of the current list page
 - `next-n` - the number of the next list page in the set
