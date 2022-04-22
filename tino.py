@@ -3,6 +3,7 @@
 # - standard library
 from sys import argv, exit
 from os import system, listdir, mkdir, path, sep
+from re import sub
 from functools import reduce
 from operator import itemgetter
 from copy import deepcopy
@@ -105,6 +106,14 @@ def get_page_path(content_path):
   page_filename = '.'.join([*content_path_parts[-1].split('.')[0:-1], 'html'])
   return sep.join([page_subpath, page_filename])
 
+def extract_img_src(markdown_str):
+  start = markdown_str.index('(') + 1
+  end = markdown_str.rindex(')')
+  return markdown_str[start:end]
+
+def remove_a_hrefs(html_str):
+  return sub(r' href=".*"', '', html_str)
+
 def extract_content(acc, line):
   line_stripped = line.strip()
   if '' == line_stripped: return acc
@@ -117,6 +126,10 @@ def extract_content(acc, line):
     [key_raw, value_raw] = line_parts
     acc['pairs'][key_raw.strip()] = value_raw.strip().replace('"', '')
   else:
+    if not acc['pairs']['image'] and '![' == line_stripped[0:2] and ')' == line_stripped[-1]:
+      acc['pairs']['image'] = extract_img_src(line_stripped)
+    if not acc['pairs']['intro'] and line_stripped[0] not in ['#', '!']:
+      acc['pairs']['intro'] = remove_a_hrefs(markdown(line))
     acc['lines_body'].append(line)
   return acc
 
@@ -124,7 +137,10 @@ def format_content(content_path, tree_src):
   cache_in = {
     'in_head': False,
     'lines_body': [],
-    'pairs': {}
+    'pairs': {
+      'image': '',
+      'intro': ''
+    }
   }
   content_file = read_by_path(tree_src, content_path)
   cache_out = reduce(extract_content, content_file, cache_in)
