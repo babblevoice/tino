@@ -298,6 +298,9 @@ def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
     if item_name in ['assets', 'images']: continue
     if '.' == item_name[0]: continue
     item_path = get_source_path(root, item_name)
+    if not path.exists(item_path):
+      if 'content' == item_path: tree_src['content'] = {}
+      continue
     if path.isdir(item_path):
       tree_src[item_name] = get_source_tree(listdir(item_path), item_path) # recurse
       continue
@@ -344,11 +347,12 @@ def include_content(tree_src, root = '.'):
 
 def init_output_dir():
   ensure_out_dir()
-  ensure_out_dir('assets')
-  system(f'cp -r static/assets/* {out}/assets/')
-  if exclude_content: return
-  ensure_out_dir('images')
-  system(f'cp -r content/images/* {out}/images/') #ln -s content/images/* {out}/images/')
+  if path.exists('static/assets'):
+    ensure_out_dir('assets')
+    system(f'cp -r static/assets/* {out}/assets/')
+  if not exclude_content and path.exists('content/images'):
+    ensure_out_dir('images')
+    system(f'cp -r content/images/* {out}/images/') #ln -s content/images/* {out}/images/')
 
 def output_static(tree_src, root = 'static'):
   if 'static' == root: init_output_dir()
