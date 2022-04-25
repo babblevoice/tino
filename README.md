@@ -25,13 +25,14 @@ Generate a website from a set of three source directories, producing complete HT
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
 - generation of paginated content lists based on `.list` templates, incl. population with pagination values
 - static file save to default output directory, for an arbitrarily deep static tree
+- live serving
 
 ## Todo
 
 - extend to support tags, incl. tag list pages using the `.tags.list` template, outputting to a tags/ subdirectory for the content type
-- upgrade to live serving
 - revise remaining commands to equivalent Python method calls
-- memo updated filenames
+- revise live serving to implement diff
+- memoise completed partial filenames
 - refactor and comment
 
 ## Code
@@ -65,6 +66,21 @@ For example:
 </ul>
 ```
 
+##### Content file values
+
+Each content file has a meta section of colon-separated key-value pairs demarcated above and below by a single line reading `---`. This section is followed by the lines of body text, which can use Markdown.
+
+For example:
+
+```md
+---
+key_1: value_1
+key_2: value_2
+---
+
+body
+```
+
 #### Templates
 
 Available template types:
@@ -76,16 +92,22 @@ Available template types:
 Specifically:
 
 - any HTML file in static/ with a name of the form type.page.html is a template to be populated with values from the content subdirectory of that type, e.g. blog.news.item.html from files in content/blog/news/; one output file is to be generated per file in the subdirectory, each named for the source content file, e.g. content/blog/news/post1.md becoming blog/news/post1.html
-- any HTML file in partials/ with a name of the form type.item.description.html is a template to be populated with values from the content subdirectory of that type, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item
+- any HTML file in partials/ with a name of the form [type.]item.description.html is a template to be populated with values from the content subdirectory of that type, if the type is present, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item; if no type is present in the name, this is provided in the item inclusion syntax by prefixing the name with the type followed by a colon (':'), e.g. `<== type:item.description.html`
 - any HTML file in static/ with a name of the form type.list.html is a template to be completed with the content of one `.item` file in partials/, each `.item` generated once per file in the content subdirectory of that type, e.g. blog.news.list.html relates to files in content/blog/news/; one output file is to be generated per page of the paginated list, each currently named `page-` plus the page number, e.g. content/blog/news/page-1.html for the first
 
 ##### Additional values
 
-The following values are available for use in `.item` templates:
+In addition to values provided in the meta section of the content file (see [Content file values](#content-file-values) above), the following are available for use in `.item` templates:
 
 - `image` - the URL of the first image on its own line in the body of the content file
-- `intro` - the first non-heading, non-image line of the body of the content file
+- `intro` - the first non-heading, non-image line of the body of the content file, converted from Markdown to HTML, with any `a` element `href` value removed
+- `body` - the body of the content file, converted from Markdown to HTML
 - `href` - the URL of the output file
+
+The following values are available for use in files applying `.item` templates, excluding `.list` templates, for the purpose of populating control elements:
+
+- `.available` - the total number of content files of the type, preceded with the dot-separated type, e.g. blog.news.available
+- `.remaining` - the number of content files of the type not used in the file, preceded with the dot-separated type, e.g. blog.news.remaining
 
 The following values are available for use in `.list` templates for the purpose of populating control elements:
 
@@ -117,7 +139,7 @@ The main file can be run for the default behaviour with the command `python3 tin
 
 #### Development
 
-A development server listening at `localhost:8000` can be run with the command `python3 tino.py server`.
+A development live server listening at `localhost:8000` can be run with the command `python3 tino.py server`.
 
 ##### Options
 
