@@ -7,6 +7,7 @@ from re import sub
 from functools import reduce
 from operator import itemgetter
 from copy import deepcopy
+# - for server option
 from subprocess import Popen, signal
 from time import sleep, time
 from traceback import print_exc
@@ -17,6 +18,9 @@ from markdown import markdown
 # configure project
 tag = '<=='
 out = 'public'
+
+# configure serving
+server_loop_secs = 3
 
 # handle options
 exclude_content = True if '--exclude-content' in argv else False
@@ -369,14 +373,6 @@ def output_static(tree_src, root = 'static'):
     content = ''.join(tree_src_lvl[item_name])
     output_lines(item_path, content)
 
-generate_site = prime_workflow(
-  get_source_tree,
-  prepare_content,
-  insert_partials,
-  include_content,
-  output_static
-)
-
 def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
   is_updated = False
   for item_name in dirs:
@@ -391,8 +387,16 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
       continue
     if is_updated: return True
     item_secs_modified = int(str(path.getmtime(item_path)).split('.')[0])
-    is_updated = time_secs_current - item_secs_modified < 2
+    is_updated = time_secs_current - item_secs_modified < server_loop_secs
   return is_updated
+
+generate_site = prime_workflow(
+  get_source_tree,
+  prepare_content,
+  insert_partials,
+  include_content,
+  output_static
+)
 
 # init
 
@@ -406,7 +410,7 @@ pid = None
 try:
   pid = Popen(['python3', '-m', 'http.server', '-d', out]).pid
   while True:
-    sleep(2)
+    sleep(server_loop_secs)
     time_secs_current = int(str(time()).split('.')[0])
     if check_source_updated(time_secs_current):
       print(f'Source modified - updating {out}/')
