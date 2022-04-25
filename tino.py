@@ -166,7 +166,7 @@ def populate_lines(base_lines, content_file, content_path):
   for base_line in base_lines:
     if tag not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
-    if source not in list(content_file.keys()): raise KeyError(f'No {source} for {content_path}')
+    if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
     if list == type(source_value): lines.extend(list(map(lambda line: get_with_indent(line, indent), source_value))); continue
     source_line = source_value if source_value and '\n' == source_value[-1] else source_value + '\n' if source_value else ''
@@ -186,6 +186,29 @@ def generate_items(base_lines, content_dir, source, number = None, offset = 0):
     lines.extend(populate_lines(base_lines, content_file[1], content_file[0]))
   return lines
 
+
+class Item_Pairs_Totals:
+
+  pairs_base = {
+    'available': lambda total, used: str(total),
+    'remaining': lambda total, used: 'data-remaining="0"' if used >= total else f'data-remaining="{str(total - used)}"'
+  }
+
+  pairs_temp = {}
+
+  @staticmethod
+  def get():
+    return Item_Pairs_Totals.pairs_temp
+
+  @staticmethod
+  def set(subpath, available, used):
+    new_dict = (dict((subpath.replace(sep, '.') + '.' + k, v(available, used)) for k, v in Item_Pairs_Totals.pairs_base.items()))
+    Item_Pairs_Totals.pairs_temp = {**Item_Pairs_Totals.pairs_temp, **new_dict}
+
+  @staticmethod
+  def reset():
+    Item_Pairs_Totals.pairs = {}
+
 def complete_base(base_lines_path, tree_src):
 
   base_lines = read_by_path(tree_src, base_lines_path)
@@ -201,6 +224,8 @@ def complete_base(base_lines_path, tree_src):
       lines.append(base_line)
       continue
 
+    is_item = check_file_item(source.split(sep)[-1])
+
     # remove content type prefix from source if source indicates use of generic .item template
     source_filename = source if 1 == len(source.split(':')) else source.split(':')[1]
 
@@ -211,9 +236,21 @@ def complete_base(base_lines_path, tree_src):
 
     base_lines_complete = read_by_path(tree_src['partials'], source_filename)
     base_lines_multiplied = generate_items(base_lines_complete, tree_src['content'], source, number)\
-      if not exclude_content and check_file_item(source.split(sep)[-1]) else base_lines_complete * number
+      if not exclude_content and is_item else base_lines_complete * number
+
+    if is_item:
+
+      subpath = get_subpath(source, -3)
+      if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
+        subpath = source.split(':')[0].replace('.', sep)
+
+      available = len(list(read_by_path(tree_src['content'], subpath).keys()))
+      Item_Pairs_Totals.set(subpath, available, number)
 
     lines.extend([get_with_indent(line, indent) for line in base_lines_multiplied])
+
+  if len(list(Item_Pairs_Totals.get().items())) > 0:
+    lines = populate_lines(lines, Item_Pairs_Totals.get(), base_lines_path)
 
   tree_src = write_by_path(tree_src, base_lines_path, lines)
   return tree_src
@@ -335,6 +372,7 @@ def insert_partials(tree_src, root = '.'):
       continue
     if check_file_html(item_name):
       tree_src = complete_base(item_path, tree_src)
+      Item_Pairs_Totals.reset()
   return tree_src
 
 def include_content(tree_src, root = '.'):
