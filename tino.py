@@ -2,11 +2,14 @@
 
 # - standard library
 from sys import argv, exit
-from os import system, listdir, mkdir, path, sep
+from os import system, listdir, mkdir, path, sep, kill
 from re import sub
 from functools import reduce
 from operator import itemgetter
 from copy import deepcopy
+from subprocess import Popen, signal
+from time import sleep, time
+from traceback import print_exc
 
 # - external library
 from markdown import markdown
@@ -15,12 +18,7 @@ from markdown import markdown
 tag = '<=='
 out = 'public'
 
-# handle arguments
-if 'server' in argv:
-  print(f'View site at localhost:8000 | Press Ctrl+C here to stop')
-  system(f'python3 -m http.server -d {out}')
-  exit()
-
+# handle options
 exclude_content = True if '--exclude-content' in argv else False
 
 # define utilities
@@ -371,12 +369,51 @@ def output_static(tree_src, root = 'static'):
     content = ''.join(tree_src_lvl[item_name])
     output_lines(item_path, content)
 
-# init
-
 generate_site = prime_workflow(
   get_source_tree,
   prepare_content,
   insert_partials,
   include_content,
   output_static
-)()
+)
+
+def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
+  is_updated = False
+  for item_name in dirs:
+    if 'content' == item_name and exclude_content: continue
+    if item_name in ['assets', 'images']: continue
+    if '.' == item_name[0]: continue
+    item_path = get_source_path(root, item_name)
+    if not path.exists(item_path):
+      continue
+    if path.isdir(item_path):
+      is_updated = check_source_updated(time_secs_current, listdir(item_path), item_path) # recurse
+      continue
+    if is_updated: return True
+    item_secs_modified = int(str(path.getmtime(item_path)).split('.')[0])
+    is_updated = time_secs_current - item_secs_modified < 2
+  return is_updated
+
+# init
+
+generate_site()
+
+if not 'server' in argv:
+  exit()
+
+print(f'View site at localhost:8000 | Press Ctrl+C here to stop')
+pid = None
+try:
+  pid = Popen(['python3', '-m', 'http.server', '-d', out]).pid
+  while True:
+    sleep(2)
+    time_secs_current = int(str(time()).split('.')[0])
+    if check_source_updated(time_secs_current):
+      print(f'Source modified - updating {out}/')
+      generate_site()
+except KeyboardInterrupt:
+  exit()
+except Exception:
+  print_exc()
+  kill(pid, signal.SIGKILL)
+  exit()
