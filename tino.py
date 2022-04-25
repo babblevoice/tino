@@ -173,6 +173,8 @@ def populate_lines(base_lines, content_file, content_path):
 
 def generate_items(base_lines, content_dir, source, number = None, offset = 0):
   subpath = get_subpath(source, -3)
+  if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
+    subpath = source.split(':')[0].replace('.', sep)
   content_items = list(read_by_path(content_dir, subpath).items()) # returns list of str-dict tuples
   content_files = list(filter(lambda item: check_file_md(item[0]), content_items))
   content_files_sorted = sorted(content_files, key = lambda file: file[1]['date'], reverse = True)
@@ -197,12 +199,15 @@ def complete_base(base_lines_path, tree_src):
       lines.append(base_line)
       continue
 
-    partials_file = read_by_path(tree_src['partials'], source)
+    # remove content type prefix from source if source indicates use of generic .item template
+    source_filename = source if 1 == len(source.split(':')) else source.split(':')[1]
+
+    partials_file = read_by_path(tree_src['partials'], source_filename)
     if not partials_file: raise KeyError(f'No partial for {source}')
 
-    tree_src = complete_base(get_source_path('partials', source), tree_src) # recurse
+    tree_src = complete_base(get_source_path('partials', source_filename), tree_src) # recurse
 
-    base_lines_complete = read_by_path(tree_src['partials'], source)
+    base_lines_complete = read_by_path(tree_src['partials'], source_filename)
     base_lines_multiplied = generate_items(base_lines_complete, tree_src['content'], source, number)\
       if not exclude_content and check_file_item(source.split(sep)[-1]) else base_lines_complete * number
 
