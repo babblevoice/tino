@@ -25,13 +25,13 @@ Generate a website from a set of three source directories, producing complete HT
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
 - generation of paginated content lists based on `.list` templates, incl. population with pagination values
 - static file save to default output directory, for an arbitrarily deep static tree
-- live serving
+- partial live serving - file tree update on change, without page reload
 
 ## Todo
 
 - extend to support tags, incl. tag list pages using the `.tags.list` template, outputting to a tags/ subdirectory for the content type
 - revise remaining commands to equivalent Python method calls
-- revise live serving to implement diff
+- extend live serving to reload page and revise to diff
 - memoise completed partial filenames
 - refactor and comment
 
@@ -106,21 +106,25 @@ In addition to values provided in the meta section of the content file (see [Con
 
 The following values are available for use in files applying `.item` templates, excluding `.list` templates, for the purpose of populating control elements:
 
-- `.available` - the total number of content files of the type, preceded with the dot-separated type, e.g. blog.news.available
-- `.remaining` - the number of content files of the type not used in the file, preceded with the dot-separated type, e.g. blog.news.remaining
+- `.total` - the total number of content files of the type, preceded with the dot-separated type, e.g. blog.news.available
+- `.total-attr` - the total number of content files of the type as the value in an attribute named by default `data-type-total`, preceded with the dot-separated type, e.g. blog.news.total-attr
+- `.extra` - the number of content files of the type not used in the file, preceded with the dot-separated type, e.g. blog.news.extra
+- `.extra-attr` - the number of content files of the type not used in the file as the value in an attribute named by default `data-type-extra`, preceded with the dot-separated type, e.g. blog.news.extra-attr
 
 The following values are available for use in `.list` templates for the purpose of populating control elements:
 
-- `first` - the URL of the output file for the first list page of the set
-- `last` - the URL of the output file for the last list page of the set
-- `prev` - the URL of the output file for the previous list page in the set
-- `this` - the URL of the output file for the current list page
-- `next` - the URL of the output file for the next list page in the set
+- `first-url` - the URL of the output file for the first list page of the set
+- `last-url` - the URL of the output file for the last list page of the set
+- `prev-url` - the URL of the output file for the previous list page in the set
+- `this-url` - the URL of the output file for the current list page
+- `next-url` - the URL of the output file for the next list page in the set
 - `prev-n` - the number of the previous list page in the set
 - `this-n` - the number of the current list page
 - `next-n` - the number of the next list page in the set
-- `prev-more` - the number of list pages before `prev-n`
-- `next-more` - the number of list pages after `next-n`
+- `prev-extra` - the number of list pages before `prev-n`
+- `prev-extra-attr` - the number of list pages before `prev-n` as the value in an attribute named by default `data-page-prev-extra`
+- `next-extra` - the number of list pages after `next-n`
+- `next-extra-attr` - the number of list pages after `next-n` as the value in an attribute named by default `data-page-next-extra`
 
 ### Requirements
 
