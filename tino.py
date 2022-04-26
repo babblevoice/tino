@@ -17,13 +17,55 @@ from markdown import markdown
 
 # configure project
 tag = '<=='
+pre = 'data-'
 out = 'public'
 
 # configure serving
 server_loop_secs = 3
 
-# handle options
+# handle CLI options
 exclude_content = True if '--exclude-content' in argv else False
+
+# define value usage
+
+class Pairs_Item:
+
+  pairs_base = {
+    'total':      lambda total, used: str(total),
+    'total-attr': lambda total, used: get_data_attr('type-total', str(total)),
+    'extra':      lambda total, used: '0' if used >= total else str(total - used),
+    'extra-attr': lambda total, used: get_data_attr('type-extra', '0' if used >= total else str(total - used))
+  }
+
+  pairs_temp = {}
+
+  @staticmethod
+  def get():
+    return Pairs_Item.pairs_temp
+
+  @staticmethod
+  def set(subpath, total, used):
+    new_dict = (dict((subpath.replace(sep, '.') + '.' + k, v(total, used)) for k, v in Pairs_Item.pairs_base.items()))
+    Pairs_Item.pairs_temp = {**Pairs_Item.pairs_temp, **new_dict}
+
+  @staticmethod
+  def reset():
+    Pairs_Item.pairs = {}
+
+pairs_list = {
+  'first-url':       lambda names, i: names[0],
+  'prev-extra':      lambda names, i: '0' if i - 2 < 0 else str(0 + i - 1),
+  'prev-extra-attr': lambda names, i: get_data_attr('page-prev-extra', '0' if i - 2 < 0 else str(0 + i - 1)),
+  'prev-url':        lambda names, i: '' if i - 1 < 0 else names[i - 1],
+  'prev-n':          lambda names, i: '' if i - 1 < 0 else str(i),
+  'this-url':        lambda names, i: names[i],
+  'this-n':          lambda names, i: str(i + 1),
+  'next-url':        lambda names, i: '' if i + 1 >= len(names) else names[i + 1],
+  'next-n':          lambda names, i: '' if i + 1 >= len(names) else str(i + 2),
+  'next-extra':      lambda names, i: '0' if i + 2 >= len(names) else str(len(names) - i - 2),
+  'next-extra-attr': lambda names, i: get_data_attr('page-next-extra', '0' if i + 2 >= len(names) else str(len(names) - i - 2)),
+  'last-url':        lambda names, i: names[-1]
+}
 
 # define utilities
 
@@ -76,6 +118,9 @@ def delete_by_path(d, p):
     del d[path_parts[0]]
     return
   delete_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
+
+def get_data_attr(stem, value):
+  return f'{pre}{stem}="{value}"'
 
 def get_with_indent(line, size):
   return line if '' == line.strip() else ' ' * size + line
@@ -149,7 +194,7 @@ def format_content(content_path, tree_src):
   lines_body, pairs = itemgetter('lines_body', 'pairs')(cache_out)
 
   pairs['body'] = list(map(lambda line: markdown(line) + '\n', lines_body))
-  pairs['href'] = get_page_path(content_path)
+  pairs['url'] = get_page_path(content_path)
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
 
@@ -186,29 +231,6 @@ def generate_items(base_lines, content_dir, source, number = None, offset = 0):
     lines.extend(populate_lines(base_lines, content_file[1], content_file[0]))
   return lines
 
-
-class Item_Pairs_Totals:
-
-  pairs_base = {
-    'available': lambda total, used: str(total),
-    'remaining': lambda total, used: 'data-remaining="0"' if used >= total else f'data-remaining="{str(total - used)}"'
-  }
-
-  pairs_temp = {}
-
-  @staticmethod
-  def get():
-    return Item_Pairs_Totals.pairs_temp
-
-  @staticmethod
-  def set(subpath, available, used):
-    new_dict = (dict((subpath.replace(sep, '.') + '.' + k, v(available, used)) for k, v in Item_Pairs_Totals.pairs_base.items()))
-    Item_Pairs_Totals.pairs_temp = {**Item_Pairs_Totals.pairs_temp, **new_dict}
-
-  @staticmethod
-  def reset():
-    Item_Pairs_Totals.pairs = {}
-
 def complete_base(base_lines_path, tree_src):
 
   base_lines = read_by_path(tree_src, base_lines_path)
@@ -244,13 +266,13 @@ def complete_base(base_lines_path, tree_src):
       if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
         subpath = source.split(':')[0].replace('.', sep)
 
-      available = len(list(read_by_path(tree_src['content'], subpath).keys()))
-      Item_Pairs_Totals.set(subpath, available, number)
+      total = len(list(read_by_path(tree_src['content'], subpath).keys()))
+      Pairs_Item.set(subpath, total, number)
 
     lines.extend([get_with_indent(line, indent) for line in base_lines_multiplied])
 
-  if len(list(Item_Pairs_Totals.get().items())) > 0:
-    lines = populate_lines(lines, Item_Pairs_Totals.get(), base_lines_path)
+  if len(list(Pairs_Item.get().items())) > 0:
+    lines = populate_lines(lines, Pairs_Item.get(), base_lines_path)
 
   tree_src = write_by_path(tree_src, base_lines_path, lines)
   return tree_src
@@ -268,24 +290,11 @@ def generate_pages(page_base_path, tree_src):
       page_content = read_by_path(tree_src['content'], page_content_path)
 
       page_lines = populate_lines(page_base_lines, page_content, page_content_path)
-      page_path = tree_src_lvl[page_content_name]['href']
+      page_path = tree_src_lvl[page_content_name]['url']
       tree_src = write_by_path(tree_src, get_source_path('static', page_path), page_lines)
 
   delete_by_path(tree_src, page_base_path)
   return tree_src
-
-list_pairs = {
-  'first':     lambda names, i: names[0],
-  'prev-more': lambda names, i: '' if i - 2 < 0 else str(0 + i - 1),
-  'prev':      lambda names, i: '' if i - 1 < 0 else names[i - 1],
-  'prev-n':    lambda names, i: '' if i - 1 < 0 else str(i),
-  'this':      lambda names, i: names[i],
-  'this-n':    lambda names, i: str(i + 1),
-  'next':      lambda names, i: '' if i + 1 >= len(names) else names[i + 1],
-  'next-n':    lambda names, i: '' if i + 1 >= len(names) else str(i + 2),
-  'next-more': lambda names, i: '' if i + 2 >= len(names) else str(len(names) - i - 2),
-  'last':      lambda names, i: names[-1]
-}
 
 def generate_list(list_base_path, tree_src):
 
@@ -294,7 +303,7 @@ def generate_list(list_base_path, tree_src):
   tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
 
   list_base_lines = read_by_path(tree_src, list_base_path)
-  list_pair_keys = list_pairs.keys()
+  list_pair_keys = pairs_list.keys()
   tag_data = {}
   lines = []
 
@@ -324,7 +333,7 @@ def generate_list(list_base_path, tree_src):
 
     list_page_lines = [*lines[0:tag_data['index']], *[get_with_indent(line, indent) for line in list_page_items], *lines[tag_data['index']:]]
 
-    list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in list_pairs.items()))
+    list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in pairs_list.items()))
     list_page_lines = populate_lines(list_page_lines, list_page_pairs_i, list_base_path)
 
     list_page_path = get_source_path('static', list_subpath, list_page_names[i])
@@ -372,7 +381,7 @@ def insert_partials(tree_src, root = '.'):
       continue
     if check_file_html(item_name):
       tree_src = complete_base(item_path, tree_src)
-      Item_Pairs_Totals.reset()
+      Pairs_Item.reset()
   return tree_src
 
 def include_content(tree_src, root = '.'):
