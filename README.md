@@ -29,7 +29,8 @@ Generate a website from a set of three source directories, producing complete HT
 
 ## Todo
 
-- extend to support tags, incl. tag list pages using the `.tags.list` template, outputting to a tags/ subdirectory for the content type
+- extend to support tag equivalents, incl. list pages using a `.tags.list` template, outputting to a <tags>/ subdirectory for the content type
+- extend use of path tag to other nested files
 - revise remaining commands to equivalent Python method calls
 - extend live serving to reload page and revise to diff
 - memoise completed partial filenames
@@ -53,7 +54,9 @@ Default source directory structure:
 
 #### Inclusion
 
-Default inclusion syntax:
+##### File inclusion
+
+Default file inclusion syntax:
 
 - in all HTML files: `<== partial.html [n]`, i.e. insert partial.html here, once or n times
 - in HTML `.page` and `.item` templates: `<== key`, i.e. insert the given value from the content file here, using the key `body` for content file body text
@@ -65,6 +68,10 @@ For example:
   <== blog.news.item.li.html 5
 </ul>
 ```
+
+##### Path inclusion
+
+Default path inclusion syntax for path parts to root is `==>`. For example, the attribute `href="==>assets/logo.svg"` in a `.page` template for blog/news/, i.e. for a page two levels deep, becomes in the output file `href="../../assets/logo.svg"`.
 
 ##### Content file values
 
