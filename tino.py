@@ -93,7 +93,7 @@ check_file_page = check_file_role('page')
 check_file_item = check_file_role('item', -3)
 check_file_list = check_file_role('list')
 
-def get_subpath(p, stop = -2): # default stop value for .page and .list; -3 for .item
+def get_template_subpath(p, stop = -2): # default stop value for .page and .list; -3 for .item
   filename = p.split(sep)[-1]
   filename_parts = filename.split('.')
   return sep.join(filename_parts[0:stop])
@@ -220,13 +220,14 @@ def populate_lines(base_lines, content_file, content_path):
     (indent, source, number) = get_tag_values(base_line)
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
+    if 'url' == source: source_value = tag_path + source_value
     if list == type(source_value): lines.extend(list(map(lambda line: get_with_indent(line, indent), source_value))); continue
     source_line = source_value if source_value and '\n' == source_value[-1] else source_value + '\n' if source_value else ''
     if source_line: lines.append(get_with_indent(source_line, indent))
   return lines
 
 def generate_items(base_lines, content_dir, source, number = None, offset = 0):
-  subpath = get_subpath(source, -3)
+  subpath = get_template_subpath(source, -3)
   if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
     subpath = source.split(':')[0].replace('.', sep)
   content_items = list(read_by_path(content_dir, subpath).items()) # returns list of str-dict tuples
@@ -269,7 +270,7 @@ def complete_base(base_lines_path, tree_src):
 
     if is_item:
 
-      subpath = get_subpath(source, -3)
+      subpath = get_template_subpath(source, -3)
       if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
         subpath = source.split(':')[0].replace('.', sep)
 
@@ -284,7 +285,7 @@ def complete_base(base_lines_path, tree_src):
   # replace any path tag in a .page template with URL parts sufficient to reach project root
   is_page = check_file_page(base_lines_path.split(sep)[-1])
   if is_page:
-    subpath = get_subpath(base_lines_path, -2) if is_page else ''
+    subpath = get_template_subpath(base_lines_path, -2) if is_page else ''
     lines = list(map(lambda line: get_for_output(line, subpath), lines))
 
   tree_src = write_by_path(tree_src, base_lines_path, lines)
@@ -292,7 +293,7 @@ def complete_base(base_lines_path, tree_src):
 
 def generate_pages(page_base_path, tree_src):
 
-  page_subpath = get_subpath(page_base_path)
+  page_subpath = get_template_subpath(page_base_path)
   tree_src_lvl = read_by_path(tree_src['content'], page_subpath)
 
   for page_content_name in tree_src_lvl:
@@ -311,7 +312,7 @@ def generate_pages(page_base_path, tree_src):
 
 def generate_list(list_base_path, tree_src):
 
-  list_subpath = get_subpath(list_base_path)
+  list_subpath = get_template_subpath(list_base_path)
 
   tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
 
@@ -445,7 +446,6 @@ def output_static(tree_src, root = 'static'):
     output_lines(item_path, content)
 
 def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
-  is_updated = False
   for item_name in dirs:
     if 'content' == item_name and exclude_content: continue
     if item_name in ['assets', 'images']: continue
@@ -454,12 +454,13 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
     if not path.exists(item_path):
       continue
     if path.isdir(item_path):
-      is_updated = check_source_updated(time_secs_current, listdir(item_path), item_path) # recurse
+      if check_source_updated(time_secs_current, listdir(item_path), item_path): # recurse
+        return True
       continue
-    if is_updated: return True
     item_secs_modified = int(str(path.getmtime(item_path)).split('.')[0])
-    is_updated = time_secs_current - item_secs_modified < server_loop_secs
-  return is_updated
+    if time_secs_current - item_secs_modified < server_loop_secs:
+      return True
+  return False
 
 generate_site = prime_workflow(
   get_source_tree,
@@ -479,6 +480,7 @@ if not 'server' in argv:
 print(f'View site at localhost:8000 | Press Ctrl+C here to stop')
 pid = None
 try:
+  server_loop_secs = float(server_loop_secs + server_loop_secs / 10)
   pid = Popen(['python3', '-m', 'http.server', '-d', name_out]).pid
   while True:
     sleep(server_loop_secs)
