@@ -16,9 +16,10 @@ from traceback import print_exc
 from markdown import markdown
 
 # configure project
-tag = '<=='
-pre = 'data-'
-out = 'public'
+tag_flow = '<=='
+tag_path = '==>'
+pre_attr = 'data-'
+name_out = 'public'
 
 # configure serving
 server_loop_secs = 3
@@ -120,13 +121,19 @@ def delete_by_path(d, p):
   delete_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
 
 def get_data_attr(stem, value):
-  return f'{pre}{stem}="{value}"'
+  return f'{pre_attr}{stem}="{value}"'
 
 def get_with_indent(line, size):
   return line if '' == line.strip() else ' ' * size + line
 
+def get_depth_part(subpath):
+  return sep.join(['..'] * len(subpath.split(sep))) + sep if subpath else ''
+
+def get_for_output(line, subpath):
+  return line.replace(tag_path, get_depth_part(subpath))
+
 def ensure_out_dir(subdir = None):
-  out_path = out if subdir is None else get_source_path(out, subdir)
+  out_path = name_out if subdir is None else get_source_path(name_out, subdir)
   if not path.exists(out_path):
     try:
       mkdir(out_path)
@@ -134,7 +141,7 @@ def ensure_out_dir(subdir = None):
       pass
 
 def output_lines(filename, content):
-  with open(get_source_path(out, filename), 'w') as f:
+  with open(get_source_path(name_out, filename), 'w') as f:
     f.write(content)
 
 def prime_workflow(*functions):
@@ -199,7 +206,7 @@ def format_content(content_path, tree_src):
   return tree_src
 
 def get_tag_values(line):
-  [indent_raw, args_raw] = line.split(tag)
+  [indent_raw, args_raw] = line.split(tag_flow)
   indent = len(indent_raw)
   args = args_raw.strip().split(' ')
   source = args[0]
@@ -209,7 +216,7 @@ def get_tag_values(line):
 def populate_lines(base_lines, content_file, content_path):
   lines = []
   for base_line in base_lines:
-    if tag not in base_line: lines.append(base_line); continue
+    if tag_flow not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
@@ -238,7 +245,7 @@ def complete_base(base_lines_path, tree_src):
 
   for base_line in base_lines:
 
-    if tag not in base_line: lines.append(base_line); continue
+    if tag_flow not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
 
     if 'html' != source.split('.')[-1] or (check_file_list(base_lines_path.split(sep)[-1]) and\
@@ -274,6 +281,12 @@ def complete_base(base_lines_path, tree_src):
   if len(list(Pairs_Item.get().items())) > 0:
     lines = populate_lines(lines, Pairs_Item.get(), base_lines_path)
 
+  # replace any path tag in a .page template with URL parts sufficient to reach project root
+  is_page = check_file_page(base_lines_path.split(sep)[-1])
+  if is_page:
+    subpath = get_subpath(base_lines_path, -2) if is_page else ''
+    lines = list(map(lambda line: get_for_output(line, subpath), lines))
+
   tree_src = write_by_path(tree_src, base_lines_path, lines)
   return tree_src
 
@@ -308,7 +321,7 @@ def generate_list(list_base_path, tree_src):
   lines = []
 
   for base_line, i in zip(list_base_lines, range(len(list_base_lines))):
-    if tag not in base_line: lines.append(base_line); continue
+    if tag_flow not in base_line: lines.append(base_line); continue
     tag_values = get_tag_values(base_line)
     if tag_values[1] not in list_pair_keys:
       tag_data = {'index': i, 'values': tag_values}
@@ -341,6 +354,17 @@ def generate_list(list_base_path, tree_src):
 
   delete_by_path(tree_src, list_base_path)
   return tree_src
+
+def remove_path_tags(lines):
+  return list(map(lambda line: line.replace(tag_path, ''), lines))
+
+def join_lines(lines):
+  return ''.join(lines)
+
+finalise_content = prime_workflow(
+  remove_path_tags,
+  join_lines
+)
 
 # define key tasks
 
@@ -403,10 +427,10 @@ def init_output_dir():
   ensure_out_dir()
   if path.exists('static/assets'):
     ensure_out_dir('assets')
-    system(f'cp -r static/assets/* {out}/assets/')
+    system(f'cp -r static/assets/* {name_out}/assets/')
   if not exclude_content and path.exists('content/images'):
     ensure_out_dir('images')
-    system(f'cp -r content/images/* {out}/images/') #ln -s content/images/* {out}/images/')
+    system(f'cp -r content/images/* {name_out}/images/') #ln -s content/images/* {name_out}/images/')
 
 def output_static(tree_src, root = 'static'):
   if 'static' == root: init_output_dir()
@@ -417,7 +441,7 @@ def output_static(tree_src, root = 'static'):
       ensure_out_dir(item_path)
       output_static(tree_src, get_source_path(root, item_name)) # recurse
       continue
-    content = ''.join(tree_src_lvl[item_name])
+    content = finalise_content(tree_src_lvl[item_name])
     output_lines(item_path, content)
 
 def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
@@ -455,12 +479,12 @@ if not 'server' in argv:
 print(f'View site at localhost:8000 | Press Ctrl+C here to stop')
 pid = None
 try:
-  pid = Popen(['python3', '-m', 'http.server', '-d', out]).pid
+  pid = Popen(['python3', '-m', 'http.server', '-d', name_out]).pid
   while True:
     sleep(server_loop_secs)
     time_secs_current = int(str(time()).split('.')[0])
     if check_source_updated(time_secs_current):
-      print(f'Source modified - updating {out}/')
+      print(f'Source modified - updating {name_out}/')
       generate_site()
 except KeyboardInterrupt:
   exit()
