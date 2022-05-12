@@ -239,45 +239,134 @@ def generate_items(base_lines, content_dir, source, number = None, offset = 0):
     lines.extend(populate_lines(base_lines, content_file[1], content_file[0]))
   return lines
 
+# workflow: complete_base_line
+
+# utilities
+
+def update_to_use_base_line(cache):
+  cache['lines'].append(cache['line']['content'])
+  cache['line']['is_done'] = True
+  return cache
+
+# primaries
+
+def parse_tag_if_used_else_use_base(cache):
+  if cache['line']['is_done']:
+    return cache
+  if tag_flow not in cache['line']['content']:
+    return update_to_use_base_line(cache)
+  (indent, source, number) = get_tag_values(cache['line']['content'])
+  cache['line']['tag_values'] = {'indent': indent, 'source': source, 'number': number}
+  return cache
+
+def if_tag_src_is_not_html_use_base(cache):
+  if cache['line']['is_done']:
+    return cache
+  if 'html' != cache['line']['tag_values']['source'].split('.')[-1]:
+    return update_to_use_base_line(cache)
+  return cache
+
+def if_lines_are_item_list_use_base(cache):
+  if cache['line']['is_done']:
+    return cache
+  lines_path_end = cache['line']['file_path'].split(sep)[-1]
+  tag_source_end = cache['line']['tag_values']['source'].split(sep)[-1]
+  cache['line']['source_is_item'] = check_file_item(tag_source_end)
+  if check_file_list(lines_path_end) and cache['line']['source_is_item']:
+    return update_to_use_base_line(cache)
+  return cache
+
+def if_tag_src_is_generic_item_note(cache):
+  if cache['line']['is_done']:
+    return cache
+  # remove content type prefix from source if indicates generic .item template
+  source = cache['line']['tag_values']['source']
+  cache['line']['tag_values']['source_filename'] = source if 1 == len(source.split(':')) else source.split(':')[1]
+  return cache
+
+def confirm_partial_exists_or_throw(cache):
+  if cache['line']['is_done']:
+    return cache
+  partials_file = read_by_path(cache['tree_src']['partials'], cache['line']['tag_values']['source_filename'])
+  if not partials_file:
+    raise KeyError(f'No partial for {cache["line"]["tag_values"]["source"]}')
+  return cache
+
+def recurse_for_any_nested_partials(cache):
+  if cache['line']['is_done']:
+    return cache
+  tree_src = cache['tree_src']
+  cache['tree_src'] = complete_base(get_source_path('partials', cache['line']['tag_values']['source_filename']), tree_src)
+  return cache
+
+def complete_using_toplevel_partial(cache):
+  if cache['line']['is_done']:
+    return cache
+  cache['lines_plus'] = read_by_path(cache['tree_src']['partials'], cache['line']['tag_values']['source_filename'])
+  return cache
+
+def generate_items_else_multiply(cache):
+  if cache['line']['is_done']:
+    return cache
+  tree_src, lines_plus, line = itemgetter('tree_src', 'lines_plus', 'line')(cache)
+  source, number = itemgetter('source', 'number')(line['tag_values'])
+  cache['lines_plus'] = generate_items(lines_plus, tree_src['content'], source, number)\
+      if not exclude_content and line['source_is_item'] else lines_plus * number
+  return cache
+
+def set_pairs_if_tag_src_is_item(cache):
+  if cache['line']['is_done']:
+    return cache
+  tree_src, line = itemgetter('tree_src', 'line')(cache)
+  if line['source_is_item']:
+    source, number = itemgetter('source', 'number')(line['tag_values'])
+    subpath = get_template_subpath(source, -3)
+    if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
+      subpath = source.split(':')[0].replace('.', sep)
+    total = len(list(read_by_path(tree_src['content'], subpath).keys()))
+    Pairs_Item.set(subpath, total, number)
+  return cache
+
+def extend_lines(cache):
+  if cache['line']['is_done']:
+    return cache
+  lines_plus, line = itemgetter('lines_plus', 'line')(cache)
+  cache['lines'].extend([get_with_indent(line_plus, line['tag_values']['indent']) for line_plus in lines_plus])
+  return cache
+
+complete_base_line = prime_workflow(
+  parse_tag_if_used_else_use_base,
+  if_tag_src_is_not_html_use_base,
+  if_lines_are_item_list_use_base, # handling .list w/ .item in generate_list
+  if_tag_src_is_generic_item_note,
+  confirm_partial_exists_or_throw,
+  recurse_for_any_nested_partials,
+  complete_using_toplevel_partial,
+  generate_items_else_multiply,
+  set_pairs_if_tag_src_is_item,
+  extend_lines
+)
+
+def get_new_cache(tree_src, lines, base_lines_path, base_line):
+  return {
+    'tree_src': tree_src,
+    'lines': lines,
+    'line': {
+      'file_path': base_lines_path,
+      'content': base_line,
+      'is_done': False
+    }
+  }
+
 def complete_base(base_lines_path, tree_src):
 
   base_lines = read_by_path(tree_src, base_lines_path)
   lines = []
 
   for base_line in base_lines:
-
-    if tag_flow not in base_line: lines.append(base_line); continue
-    (indent, source, number) = get_tag_values(base_line)
-
-    if 'html' != source.split('.')[-1] or (check_file_list(base_lines_path.split(sep)[-1]) and\
-      check_file_item(source.split(sep)[-1])): # handling .list with .item in generate_list
-      lines.append(base_line)
-      continue
-
-    is_item = check_file_item(source.split(sep)[-1])
-
-    # remove content type prefix from source if source indicates use of generic .item template
-    source_filename = source if 1 == len(source.split(':')) else source.split(':')[1]
-
-    partials_file = read_by_path(tree_src['partials'], source_filename)
-    if not partials_file: raise KeyError(f'No partial for {source}')
-
-    tree_src = complete_base(get_source_path('partials', source_filename), tree_src) # recurse
-
-    base_lines_complete = read_by_path(tree_src['partials'], source_filename)
-    base_lines_multiplied = generate_items(base_lines_complete, tree_src['content'], source, number)\
-      if not exclude_content and is_item else base_lines_complete * number
-
-    if is_item:
-
-      subpath = get_template_subpath(source, -3)
-      if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
-        subpath = source.split(':')[0].replace('.', sep)
-
-      total = len(list(read_by_path(tree_src['content'], subpath).keys()))
-      Pairs_Item.set(subpath, total, number)
-
-    lines.extend([get_with_indent(line, indent) for line in base_lines_multiplied])
+    cache_new = get_new_cache(tree_src, lines, base_lines_path, base_line)
+    cache_out = complete_base_line(cache_new) # workflow, recurses
+    tree_src, lines = itemgetter('tree_src', 'lines')(cache_out)
 
   if len(list(Pairs_Item.get().items())) > 0:
     lines = populate_lines(lines, Pairs_Item.get(), base_lines_path)
@@ -356,6 +445,8 @@ def generate_list(list_base_path, tree_src):
   delete_by_path(tree_src, list_base_path)
   return tree_src
 
+# workflow: finalise_content
+
 def remove_path_tags(lines):
   return list(map(lambda line: line.replace(tag_path, ''), lines))
 
@@ -370,19 +461,29 @@ finalise_content = prime_workflow(
 # define key tasks
 
 def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
+
   tree_src = {}
+
   for item_name in dirs:
+
+    # handle items skipped
     if 'content' == item_name and exclude_content: continue
     if item_name in ['assets', 'images']: continue
     if '.' == item_name[0]: continue
+
     item_path = get_source_path(root, item_name)
+    # handle item absence
     if not path.exists(item_path):
-      if 'content' == item_path: tree_src['content'] = {}
+      if 'content' == item_path:
+        tree_src['content'] = {}
       continue
+    # handle item nesting
     if path.isdir(item_path):
       tree_src[item_name] = get_source_tree(listdir(item_path), item_path) # recurse
       continue
+
     tree_src[item_name] = get_source_file(item_path)
+
   return tree_src
 
 def prepare_content(tree_src, root = 'content'):
