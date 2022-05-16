@@ -7,7 +7,7 @@ from re import sub
 from functools import reduce
 from operator import itemgetter
 from copy import deepcopy
-# - for server option
+#   - for server option
 from subprocess import Popen, signal
 from time import sleep, time
 from traceback import print_exc
@@ -15,19 +15,25 @@ from traceback import print_exc
 # - external library
 from markdown import markdown
 
-# configure project
+
+# set default values
+
+# - build
 tag_flow = '<=='
 tag_path = '==>'
 pre_attr = 'data-'
-name_out = 'public'
+name_out = 'public1'
 
-# configure serving
+# - serve
 server_loop_secs = 3
 
+
 # handle CLI options
+
 exclude_content = True if '--exclude-content' in argv else False
 
-# define value usage
+
+# define build pairs
 
 class Pairs_Item:
 
@@ -67,6 +73,7 @@ pairs_list = {
   'next-extra-attr': lambda names, i: get_data_attr('page-next-extra', '0' if i + 2 >= len(names) else str(len(names) - i - 2)),
   'last-url':        lambda names, i: names[-1]
 }
+
 
 # define utilities
 
@@ -151,6 +158,7 @@ def prime_workflow(*functions):
       data = function(data) if data is not None else function()
     return data
   return flow
+
 
 # define processors
 
@@ -251,8 +259,6 @@ def update_to_use_base_line(cache):
 # primaries
 
 def parse_tag_if_used_else_use_base(cache):
-  if cache['line']['is_done']:
-    return cache
   if tag_flow not in cache['line']['content']:
     return update_to_use_base_line(cache)
   (indent, source, number) = get_tag_values(cache['line']['content'])
@@ -269,7 +275,7 @@ def if_tag_src_is_not_html_use_base(cache):
 def if_lines_are_item_list_use_base(cache):
   if cache['line']['is_done']:
     return cache
-  lines_path_end = cache['line']['file_path'].split(sep)[-1]
+  lines_path_end = cache['file_path'].split(sep)[-1]
   tag_source_end = cache['line']['tag_values']['source'].split(sep)[-1]
   cache['line']['source_is_item'] = check_file_item(tag_source_end)
   if check_file_list(lines_path_end) and cache['line']['source_is_item']:
@@ -284,7 +290,7 @@ def if_tag_src_is_generic_item_note(cache):
   cache['line']['tag_values']['source_filename'] = source if 1 == len(source.split(':')) else source.split(':')[1]
   return cache
 
-def confirm_partial_exists_or_throw(cache):
+def confirm_partial_file_else_throw(cache):
   if cache['line']['is_done']:
     return cache
   partials_file = read_by_path(cache['tree_src']['partials'], cache['line']['tag_values']['source_filename'])
@@ -339,7 +345,7 @@ complete_base_line = prime_workflow(
   if_tag_src_is_not_html_use_base,
   if_lines_are_item_list_use_base, # handling .list w/ .item in generate_list
   if_tag_src_is_generic_item_note,
-  confirm_partial_exists_or_throw,
+  confirm_partial_file_else_throw,
   recurse_for_any_nested_partials,
   complete_using_toplevel_partial,
   generate_items_else_multiply,
@@ -347,13 +353,45 @@ complete_base_line = prime_workflow(
   extend_lines
 )
 
-def get_new_cache(tree_src, lines, base_lines_path, base_line):
+# workflow: complete_base_file
+
+def complete_base_lines(cache):
+  base_lines = itemgetter('base_lines')(cache)
+  for base_line in base_lines:
+    cache['line']['content'] = base_line
+    cache['line']['is_done'] = False
+    cache = complete_base_line(cache) # workflow, recurses
+  return cache
+
+def populate_with_values_if_list(cache):
+  if len(list(Pairs_Item.get().items())) > 0:
+    file_path, lines = itemgetter('file_path', 'lines')(cache)
+    cache['lines'] = populate_lines(lines, Pairs_Item.get(), file_path)
+  return cache
+
+def replace_any_path_tag_if_page(cache):
+  file_path, lines = itemgetter('file_path', 'lines')(cache)
+  # replace any path tag in a .page template with URL parts sufficient to reach project root
+  is_page = check_file_page(file_path.split(sep)[-1])
+  if is_page:
+    subpath = get_template_subpath(file_path, -2) if is_page else ''
+    cache['lines'] = list(map(lambda line: get_for_output(line, subpath), lines))
+  return cache
+
+complete_base_file = prime_workflow(
+  complete_base_lines, # calls workflow complete_base_line
+  populate_with_values_if_list,
+  replace_any_path_tag_if_page
+)
+
+def get_base_cache(tree_src, base_lines_path, base_lines):
   return {
     'tree_src': tree_src,
-    'lines': lines,
+    'file_path': base_lines_path,
+    'base_lines': base_lines,
+    'lines': [],
     'line': {
-      'file_path': base_lines_path,
-      'content': base_line,
+      'content': '',
       'is_done': False
     }
   }
@@ -361,21 +399,10 @@ def get_new_cache(tree_src, lines, base_lines_path, base_line):
 def complete_base(base_lines_path, tree_src):
 
   base_lines = read_by_path(tree_src, base_lines_path)
-  lines = []
 
-  for base_line in base_lines:
-    cache_new = get_new_cache(tree_src, lines, base_lines_path, base_line)
-    cache_out = complete_base_line(cache_new) # workflow, recurses
-    tree_src, lines = itemgetter('tree_src', 'lines')(cache_out)
-
-  if len(list(Pairs_Item.get().items())) > 0:
-    lines = populate_lines(lines, Pairs_Item.get(), base_lines_path)
-
-  # replace any path tag in a .page template with URL parts sufficient to reach project root
-  is_page = check_file_page(base_lines_path.split(sep)[-1])
-  if is_page:
-    subpath = get_template_subpath(base_lines_path, -2) if is_page else ''
-    lines = list(map(lambda line: get_for_output(line, subpath), lines))
+  cache_new = get_base_cache(tree_src, base_lines_path, base_lines)
+  cache_out = complete_base_file(cache_new) # workflow, recurses
+  tree_src, lines = itemgetter('tree_src', 'lines')(cache_out)
 
   tree_src = write_by_path(tree_src, base_lines_path, lines)
   return tree_src
@@ -445,6 +472,15 @@ def generate_list(list_base_path, tree_src):
   delete_by_path(tree_src, list_base_path)
   return tree_src
 
+def init_output_dir():
+  ensure_out_dir()
+  if path.exists('static/assets'):
+    ensure_out_dir('assets')
+    system(f'cp -r static/assets/* {name_out}/assets/')
+  if not exclude_content and path.exists('content/images'):
+    ensure_out_dir('images')
+    system(f'cp -r content/images/* {name_out}/images/') #ln -s content/images/* {name_out}/images/')
+
 # workflow: finalise_content
 
 def remove_path_tags(lines):
@@ -458,7 +494,10 @@ finalise_content = prime_workflow(
   join_lines
 )
 
+
 # define key tasks
+
+# workflow: generate_site
 
 def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
 
@@ -525,15 +564,6 @@ def include_content(tree_src, root = '.'):
       tree_src = generate_list(item_path, tree_src)
   return tree_src
 
-def init_output_dir():
-  ensure_out_dir()
-  if path.exists('static/assets'):
-    ensure_out_dir('assets')
-    system(f'cp -r static/assets/* {name_out}/assets/')
-  if not exclude_content and path.exists('content/images'):
-    ensure_out_dir('images')
-    system(f'cp -r content/images/* {name_out}/images/') #ln -s content/images/* {name_out}/images/')
-
 def output_static(tree_src, root = 'static'):
   if 'static' == root: init_output_dir()
   tree_src_lvl = read_by_path(tree_src, root)
@@ -545,6 +575,14 @@ def output_static(tree_src, root = 'static'):
       continue
     content = finalise_content(tree_src_lvl[item_name])
     output_lines(item_path, content)
+
+generate_site = prime_workflow(
+  get_source_tree,
+  prepare_content,
+  insert_partials,
+  include_content,
+  output_static
+)
 
 def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
   for item_name in dirs:
@@ -563,13 +601,6 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
       return True
   return False
 
-generate_site = prime_workflow(
-  get_source_tree,
-  prepare_content,
-  insert_partials,
-  include_content,
-  output_static
-)
 
 # init
 
