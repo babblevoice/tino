@@ -22,7 +22,7 @@ from markdown import markdown
 tag_flow = '<=='
 tag_path = '==>'
 pre_attr = 'data-'
-name_out = 'public1'
+name_out = 'public'
 
 # - serve
 server_loop_secs = 3
@@ -384,14 +384,14 @@ complete_base_file = prime_workflow(
   replace_any_path_tag_if_page
 )
 
-def get_base_cache(tree_src, base_lines_path, base_lines):
+def get_cache(tree_src, base_lines_path, base_lines, base_line = ''):
   return {
     'tree_src': tree_src,
     'file_path': base_lines_path,
     'base_lines': base_lines,
     'lines': [],
     'line': {
-      'content': '',
+      'content': base_line,
       'is_done': False
     }
   }
@@ -400,7 +400,7 @@ def complete_base(base_lines_path, tree_src):
 
   base_lines = read_by_path(tree_src, base_lines_path)
 
-  cache_new = get_base_cache(tree_src, base_lines_path, base_lines)
+  cache_new = get_cache(tree_src, base_lines_path, base_lines)
   cache_out = complete_base_file(cache_new) # workflow, recurses
   tree_src, lines = itemgetter('tree_src', 'lines')(cache_out)
 
@@ -426,6 +426,12 @@ def generate_pages(page_base_path, tree_src):
   delete_by_path(tree_src, page_base_path)
   return tree_src
 
+# workflow: generate_list_line
+
+generate_list_line = prime_workflow(
+  parse_tag_if_used_else_use_base
+)
+
 def generate_list(list_base_path, tree_src):
 
   list_subpath = get_template_subpath(list_base_path)
@@ -438,14 +444,20 @@ def generate_list(list_base_path, tree_src):
   lines = []
 
   for base_line, i in zip(list_base_lines, range(len(list_base_lines))):
-    if tag_flow not in base_line: lines.append(base_line); continue
-    tag_values = get_tag_values(base_line)
-    if tag_values[1] not in list_pair_keys:
+
+    cache_new = get_cache(tree_src, list_base_path, list_base_lines, base_line)
+    cache_out = generate_list_line(cache_new) # workflow #, recurses
+
+    line = cache_out['line']
+    if 'tag_values' not in line.keys(): lines.extend(cache_out['lines']); continue
+    tag_values = line['tag_values']
+
+    if tag_values['source'] not in list_pair_keys:
       tag_data = {'index': i, 'values': tag_values}
       continue
     lines.append(base_line)
 
-  (indent, source, number) = tag_data['values'] # number taken as number per list page
+  indent, source, number = itemgetter('indent', 'source', 'number')(tag_data['values']) # number taken as number per list page
 
   partials_file = read_by_path(tree_src['partials'], source)
   if not partials_file: raise KeyError(f'No partial for {source}')
