@@ -19,8 +19,9 @@ from markdown import markdown
 # set default values
 
 # - build
-tag_flow = '<=='
-tag_path = '==>'
+tag_flow = '<==' # inserts a partial or a content file value, e.g. '<== partial.html [n]' or '<== key'
+tag_path = '==>' # provides the URL parts required to reach the root directory, e.g. '==>path/to/file'
+
 pre_attr = 'data-'
 name_out = 'public'
 
@@ -341,6 +342,7 @@ def extend_lines(cache):
   return cache
 
 complete_base_line = prime_workflow(
+  # accepts and returns cache dict
   parse_tag_if_used_else_use_base,
   if_tag_src_is_not_html_use_base,
   if_lines_are_item_list_use_base, # handling .list w/ .item in generate_list
@@ -379,18 +381,20 @@ def replace_any_path_tag_if_page(cache):
   return cache
 
 complete_base_file = prime_workflow(
+  # accepts and returns cache dict
   complete_base_lines, # calls workflow complete_base_line
   populate_with_values_if_list,
   replace_any_path_tag_if_page
 )
 
-def get_cache(tree_src, base_lines_path, base_lines, base_line = ''):
+def get_cache(tree_src, base_lines_path, base_lines, base_line = '', index = None):
   return {
     'tree_src': tree_src,
     'file_path': base_lines_path,
     'base_lines': base_lines,
     'lines': [],
     'line': {
+      'index': index,
       'content': base_line,
       'is_done': False
     }
@@ -428,8 +432,21 @@ def generate_pages(page_base_path, tree_src):
 
 # workflow: generate_list_line
 
+def if_tag_src_is_item_note_i_else_use_base(cache):
+  if cache['line']['is_done']:
+    return cache
+  list_pair_keys = pairs_list.keys()
+  tag_values, index = itemgetter('tag_values', 'index')(cache['line'])
+  if tag_values['source'] in list_pair_keys:
+    return update_to_use_base_line(cache)
+  # source assumed to be .item forming list - note index
+  cache['line']['tag_values'] = {'index': index, **tag_values}
+  return cache
+
 generate_list_line = prime_workflow(
-  parse_tag_if_used_else_use_base
+  # accepts and returns cache dict
+  parse_tag_if_used_else_use_base,
+  if_tag_src_is_item_note_i_else_use_base
 )
 
 def generate_list(list_base_path, tree_src):
@@ -439,25 +456,19 @@ def generate_list(list_base_path, tree_src):
   tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
 
   list_base_lines = read_by_path(tree_src, list_base_path)
-  list_pair_keys = pairs_list.keys()
   tag_data = {}
   lines = []
 
   for base_line, i in zip(list_base_lines, range(len(list_base_lines))):
 
-    cache_new = get_cache(tree_src, list_base_path, list_base_lines, base_line)
+    cache_new = get_cache(tree_src, list_base_path, list_base_lines, base_line, i)
     cache_out = generate_list_line(cache_new) # workflow #, recurses
 
-    line = cache_out['line']
-    if 'tag_values' not in line.keys(): lines.extend(cache_out['lines']); continue
-    tag_values = line['tag_values']
+    if 'tag_values' in cache_out['line'] and 'index' in cache_out['line']['tag_values']:
+      tag_data = cache_out['line']['tag_values']
+    lines.extend(cache_out['lines'])
 
-    if tag_values['source'] not in list_pair_keys:
-      tag_data = {'index': i, 'values': tag_values}
-      continue
-    lines.append(base_line)
-
-  indent, source, number = itemgetter('indent', 'source', 'number')(tag_data['values']) # number taken as number per list page
+  indent, source, number = itemgetter('indent', 'source', 'number')(tag_data) # number taken as number per list page
 
   partials_file = read_by_path(tree_src['partials'], source)
   if not partials_file: raise KeyError(f'No partial for {source}')
@@ -502,6 +513,7 @@ def join_lines(lines):
   return ''.join(lines)
 
 finalise_content = prime_workflow(
+  # accepts and returns lines list
   remove_path_tags,
   join_lines
 )
