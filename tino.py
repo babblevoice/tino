@@ -260,7 +260,7 @@ def update_to_use_base_line(cache):
 # primaries
 
 def parse_tag_if_used_else_use_base(cache):
-  if tag_flow not in cache['line']['content']:
+  if tag_flow not in cache['line']['content'] or cache['line']['is_item']: # relevant only for list generation where one .item sought
     return update_to_use_base_line(cache)
   (indent, source, number) = get_tag_values(cache['line']['content'])
   cache['line']['tag_values'] = {'indent': indent, 'source': source, 'number': number}
@@ -306,19 +306,19 @@ def recurse_for_any_nested_partials(cache):
   cache['tree_src'] = complete_base(get_source_path('partials', cache['line']['tag_values']['source_filename']), tree_src)
   return cache
 
-def complete_using_toplevel_partial(cache):
+def retrieve_toplevel_partial(cache):
   if cache['line']['is_done']:
     return cache
-  cache['lines_plus'] = read_by_path(cache['tree_src']['partials'], cache['line']['tag_values']['source_filename'])
+  cache['lines_partial'] = read_by_path(cache['tree_src']['partials'], cache['line']['tag_values']['source_filename'])
   return cache
 
 def generate_items_else_multiply(cache):
   if cache['line']['is_done']:
     return cache
-  tree_src, lines_plus, line = itemgetter('tree_src', 'lines_plus', 'line')(cache)
+  tree_src, lines_partial, line = itemgetter('tree_src', 'lines_partial', 'line')(cache)
   source, number = itemgetter('source', 'number')(line['tag_values'])
-  cache['lines_plus'] = generate_items(lines_plus, tree_src['content'], source, number)\
-      if not exclude_content and line['source_is_item'] else lines_plus * number
+  cache['lines_partial'] = generate_items(lines_partial, tree_src['content'], source, number)\
+      if not exclude_content and line['source_is_item'] else lines_partial * number
   return cache
 
 def set_pairs_if_tag_src_is_item(cache):
@@ -337,8 +337,8 @@ def set_pairs_if_tag_src_is_item(cache):
 def extend_lines(cache):
   if cache['line']['is_done']:
     return cache
-  lines_plus, line = itemgetter('lines_plus', 'line')(cache)
-  cache['lines'].extend([get_with_indent(line_plus, line['tag_values']['indent']) for line_plus in lines_plus])
+  lines_partial, line = itemgetter('lines_partial', 'line')(cache)
+  cache['lines'].extend([get_with_indent(line_plus, line['tag_values']['indent']) for line_plus in lines_partial])
   return cache
 
 complete_base_line = prime_workflow(
@@ -349,7 +349,7 @@ complete_base_line = prime_workflow(
   if_tag_src_is_generic_item_note,
   confirm_partial_file_else_throw,
   recurse_for_any_nested_partials,
-  complete_using_toplevel_partial,
+  retrieve_toplevel_partial,
   generate_items_else_multiply,
   set_pairs_if_tag_src_is_item,
   extend_lines
@@ -387,16 +387,15 @@ complete_base_file = prime_workflow(
   replace_any_path_tag_if_page
 )
 
-def get_cache(tree_src, base_lines_path, base_lines, base_line = '', index = None):
+def get_cache(tree_src, base_lines_path, base_lines):
   return {
     'tree_src': tree_src,
     'file_path': base_lines_path,
     'base_lines': base_lines,
     'lines': [],
     'line': {
-      'index': index,
-      'content': base_line,
-      'is_done': False
+      'is_done': False,
+      'is_item': False # relevant only for list generation where one .item is sought
     }
   }
 
@@ -441,50 +440,63 @@ def if_tag_src_is_item_note_i_else_use_base(cache):
     return update_to_use_base_line(cache)
   # source assumed to be .item forming list - note index
   cache['line']['tag_values'] = {'index': index, **tag_values}
+  cache['line']['is_item'] = True
   return cache
 
 generate_list_line = prime_workflow(
   # accepts and returns cache dict
   parse_tag_if_used_else_use_base,
-  if_tag_src_is_item_note_i_else_use_base
+  if_tag_src_is_item_note_i_else_use_base,
+  if_tag_src_is_generic_item_note,
+  confirm_partial_file_else_throw
+)
+
+def identify_listed_content(cache):
+  list_subpath = get_template_subpath(cache['file_path'])
+  cache['list_subpath'] = list_subpath
+  cache['tree_src_lvl'] = read_by_path(cache['tree_src']['content'], list_subpath)
+  return cache
+
+def extract_item_tag_values(cache):
+  base_lines = itemgetter('base_lines')(cache)
+  for base_line, i in zip(base_lines, range(len(base_lines))):
+    cache['line']['content'] = base_line
+    cache['line']['index'] = i
+    cache['line']['is_done'] = False
+    cache = generate_list_line(cache) # workflow
+  cache['line']['is_done'] = False # reset to prevent skipping by line-oriented functions in pipe
+  return cache
+
+def generate_list_page_names(cache):
+  content_filenames = list(filter(lambda key: check_file_md(key), list(cache['tree_src_lvl'].keys())))
+  list_pages_required = len(content_filenames) // cache['line']['tag_values']['number'] + 1
+  cache['list_page_names'] = [f'page-{str(n + 1)}.html' for n in range(list_pages_required)]
+  return cache
+
+generate_list_file = prime_workflow(
+  # accepts and returns cache dict
+  identify_listed_content,
+  extract_item_tag_values, # calls workflow generate_list_line
+  generate_list_page_names,
+  retrieve_toplevel_partial
 )
 
 def generate_list(list_base_path, tree_src):
 
-  list_subpath = get_template_subpath(list_base_path)
-
-  tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
-
   list_base_lines = read_by_path(tree_src, list_base_path)
-  tag_data = {}
-  lines = []
 
-  for base_line, i in zip(list_base_lines, range(len(list_base_lines))):
+  cache_new = get_cache(tree_src, list_base_path, list_base_lines)
+  cache_out = generate_list_file(cache_new) # workflow #, recurses
 
-    cache_new = get_cache(tree_src, list_base_path, list_base_lines, base_line, i)
-    cache_out = generate_list_line(cache_new) # workflow #, recurses
-
-    if 'tag_values' in cache_out['line'] and 'index' in cache_out['line']['tag_values']:
-      tag_data = cache_out['line']['tag_values']
-    lines.extend(cache_out['lines'])
-
-  indent, source, number = itemgetter('indent', 'source', 'number')(tag_data) # number taken as number per list page
-
-  partials_file = read_by_path(tree_src['partials'], source)
-  if not partials_file: raise KeyError(f'No partial for {source}')
-
-  content_filenames = list(filter(lambda key: check_file_md(key), list(tree_src_lvl.keys())))
-  list_pages_required = len(content_filenames) // number + 1
-  list_page_names = [f'page-{str(n + 1)}.html' for n in range(list_pages_required)]
-
-  partial_lines = read_by_path(tree_src['partials'], source)
+  list_subpath, list_page_names, lines, lines_partial, line = itemgetter('list_subpath', 'list_page_names', 'lines', 'lines_partial', 'line')(cache_out)
+  index, indent, source, number = itemgetter('index', 'indent', 'source', 'number')(line['tag_values']) # number taken as number per list page
 
   for i in range(len(list_page_names)):
 
     offset = i * number
-    list_page_items = generate_items(partial_lines, tree_src['content'], source, number, offset)
+    list_page_items = generate_items(lines_partial, tree_src['content'], source, number, offset)
 
-    list_page_lines = [*lines[0:tag_data['index']], *[get_with_indent(line, indent) for line in list_page_items], *lines[tag_data['index']:]]
+    list_page_lines = [*lines[0:index], *[get_with_indent(line, indent) for line in list_page_items], *lines[index:]]
 
     list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in pairs_list.items()))
     list_page_lines = populate_lines(list_page_lines, list_page_pairs_i, list_base_path)
