@@ -34,32 +34,17 @@ server_loop_secs = 3
 exclude_content = True if '--exclude-content' in argv else False
 
 
-# define build pairs
+# define additional available key-value pair handlers
 
-class Pairs_Item:
+# - in base files using .item templates
+pairs_base = {
+  'total':      lambda total, used: str(total),
+  'total-attr': lambda total, used: get_data_attr('type-total', str(total)),
+  'extra':      lambda total, used: '0' if used >= total else str(total - used),
+  'extra-attr': lambda total, used: get_data_attr('type-extra', '0' if used >= total else str(total - used))
+}
 
-  pairs_base = {
-    'total':      lambda total, used: str(total),
-    'total-attr': lambda total, used: get_data_attr('type-total', str(total)),
-    'extra':      lambda total, used: '0' if used >= total else str(total - used),
-    'extra-attr': lambda total, used: get_data_attr('type-extra', '0' if used >= total else str(total - used))
-  }
-
-  pairs_temp = {}
-
-  @staticmethod
-  def get():
-    return Pairs_Item.pairs_temp
-
-  @staticmethod
-  def set(subpath, total, used):
-    new_dict = (dict((subpath.replace(sep, '.') + '.' + k, v(total, used)) for k, v in Pairs_Item.pairs_base.items()))
-    Pairs_Item.pairs_temp = {**Pairs_Item.pairs_temp, **new_dict}
-
-  @staticmethod
-  def reset():
-    Pairs_Item.pairs = {}
-
+# - in .list templates
 pairs_list = {
   'first-url':       lambda names, i: names[0],
   'prev-extra':      lambda names, i: '0' if i - 2 < 0 else str(0 + i - 1),
@@ -75,6 +60,11 @@ pairs_list = {
   'last-url':        lambda names, i: names[-1]
 }
 
+# - in .item templates inserted with 'tags'
+pairs_item_tag = {
+  'tag-url':  lambda subpath, tag: f'==>{subpath}{sep}{tag}{sep}page-1.html',
+  'tag-name': lambda subpath, tag: tag
+}
 
 # define utilities
 
@@ -177,17 +167,29 @@ def extract_img_src(markdown_str):
 def remove_a_hrefs(html_str):
   return sub(r' href=".*"', '', html_str)
 
+def get_tags_as_list(tag_string):
+  tag_string_content = raw = tag_string.replace('[', '').replace(']', '')
+  tags_raw = tag_string_content.split(',') if len(tag_string_content) > 0 else []
+  return list(map(lambda tag_raw: tag_raw.strip(), tags_raw))
+
 def extract_content(acc, line):
   line_stripped = line.strip()
+  # handle blank lines
   if '' == line_stripped: return acc
+  # handle head section
+  # - head delimiters
   if '---' == line_stripped:
     if not acc['in_head']: acc['in_head'] = True; return acc
     acc['in_head'] = False; return acc
+  # - key-value pairs
   if acc['in_head']:
     line_parts_raw = line.split(':')
     line_parts = [line_parts_raw[0], ':'.join(line_parts_raw[1:])]
     [key_raw, value_raw] = line_parts
-    acc['pairs'][key_raw.strip()] = value_raw.strip().replace('"', '')
+    key = key_raw.strip()
+    value = value_raw.strip()
+    acc['pairs'][key] = get_tags_as_list(value) if 'tags' == key else value.replace('"', '') # remove string delimiters
+  # handle body section
   else:
     if not acc['pairs']['image'] and '![' == line_stripped[0:2] and ')' == line_stripped[-1]:
       acc['pairs']['image'] = extract_img_src(line_stripped)
@@ -219,14 +221,25 @@ def get_tag_values(line):
   indent = len(indent_raw)
   args = args_raw.strip().split(' ')
   source = args[0]
-  number = 1 if 1 == len(args) else int(args[1]) if 'all' != args[1] else None
+  number = 1 if 1 == len(args) else int(args[1]) if args[1] not in ['all', 'tags'] else 'tags' if 'tags' == args[1] else None
   return (indent, source, number)
 
-def populate_lines(base_lines, content_file, content_path):
+def generate_tags(content_file, indent, source, tree_src):
+  lines = []
+  subpath = source.split(".")[0]
+  tags = content_file['tags']
+  for tag in tags:
+    tag_item_pairs_i = (dict((k, v(subpath, tag)) for k, v in pairs_item_tag.items()))
+    lines.extend(populate_lines(read_by_path(tree_src['partials'], source), tag_item_pairs_i))
+  lines = list(map(lambda line: get_with_indent(line, indent), lines))
+  return ''.join(lines)
+
+def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required for use of tags content value
   lines = []
   for base_line in base_lines:
     if tag_flow not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
+    if 'tags' == number: lines.append(generate_tags(content_file, indent, source, tree_src)); continue
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
     if 'url' == source: source_value = tag_path + source_value
@@ -235,17 +248,12 @@ def populate_lines(base_lines, content_file, content_path):
     if source_line: lines.append(get_with_indent(source_line, indent))
   return lines
 
-def generate_items(base_lines, content_dir, source, number = None, offset = 0):
-  subpath = get_template_subpath(source, -3)
-  if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
-    subpath = source.split(':')[0].replace('.', sep)
-  content_items = list(read_by_path(content_dir, subpath).items()) # returns list of str-dict tuples
-  content_files = list(filter(lambda item: check_file_md(item[0]), content_items))
+def generate_items(base_lines, content_files, number = None, offset = 0):
   content_files_sorted = sorted(content_files, key = lambda file: file[1]['date'], reverse = True)
-  content_files_subset = content_files_sorted[offset:offset + number]
+  content_files_batch = content_files_sorted[offset:offset + number]
   lines = []
-  for content_file in content_files_subset:
-    lines.extend(populate_lines(base_lines, content_file[1], content_file[0]))
+  for content_file in content_files_batch:
+    lines.extend(populate_lines(base_lines, content_file[1]))
   return lines
 
 # workflow: complete_base_line
@@ -255,6 +263,11 @@ def generate_items(base_lines, content_dir, source, number = None, offset = 0):
 def update_to_use_base_line(cache):
   cache['lines'].append(cache['line']['content'])
   cache['line']['is_done'] = True
+  return cache
+
+def generate_template_pairs(cache, subpath, total, used):
+  new_dict = (dict((subpath.replace(sep, '.') + '.' + k, v(total, used)) for k, v in pairs_base.items()))
+  cache['pairs_temp'] = {**cache['pairs_temp'], **new_dict}
   return cache
 
 # primaries
@@ -269,7 +282,8 @@ def parse_tag_if_used_else_use_base(cache):
 def if_tag_src_is_not_html_use_base(cache):
   if cache['line']['is_done']:
     return cache
-  if 'html' != cache['line']['tag_values']['source'].split('.')[-1]:
+  if 'html' != cache['line']['tag_values']['source'].split('.')[-1]\
+    or ('tags' == cache['line']['tag_values']['number']): # and check_file_page(cache['file_path'])): # is .page template
     return update_to_use_base_line(cache)
   return cache
 
@@ -312,12 +326,28 @@ def retrieve_toplevel_partial(cache):
   cache['lines_partial'] = read_by_path(cache['tree_src']['partials'], cache['line']['tag_values']['source_filename'])
   return cache
 
+def identify_content_subpath(cache):
+  if cache['line']['is_done']:
+    return cache
+  source, source_filename = itemgetter('source', 'source_filename')(cache['line']['tag_values'])
+  subpath = get_template_subpath(source, -3) if source == source_filename else source.split(':')[0].replace('.', sep) # use full path if generic .item
+  cache['subpath'] = subpath
+  return cache
+
+def get_content_file_subset(cache):
+  if cache['line']['is_done']:
+    return cache
+  content_items = list(read_by_path(cache['tree_src']['content'], cache['subpath']).items()) if cache['subpath'] else [] # returns list of str-dict tuples
+  content_files = list(filter(lambda item: check_file_md(item[0]), content_items))
+  cache['content_files'] = list(filter(lambda item: 'tags' in item[1] and cache['tag'] in item[1]['tags'], content_files)) if cache['tag'] else content_files
+  return cache
+
 def generate_items_else_multiply(cache):
   if cache['line']['is_done']:
     return cache
   tree_src, lines_partial, line = itemgetter('tree_src', 'lines_partial', 'line')(cache)
   source, number = itemgetter('source', 'number')(line['tag_values'])
-  cache['lines_partial'] = generate_items(lines_partial, tree_src['content'], source, number)\
+  cache['lines_partial'] = generate_items(lines_partial, cache['content_files'], number)\
       if not exclude_content and line['source_is_item'] else lines_partial * number
   return cache
 
@@ -327,11 +357,11 @@ def set_pairs_if_tag_src_is_item(cache):
   tree_src, line = itemgetter('tree_src', 'line')(cache)
   if line['source_is_item']:
     source, number = itemgetter('source', 'number')(line['tag_values'])
-    subpath = get_template_subpath(source, -3)
+    subpath = cache['subpath']
     if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
       subpath = source.split(':')[0].replace('.', sep)
     total = len(list(read_by_path(tree_src['content'], subpath).keys()))
-    Pairs_Item.set(subpath, total, number)
+    cache = generate_template_pairs(cache, subpath, total, number)
   return cache
 
 def extend_lines(cache):
@@ -350,6 +380,8 @@ complete_base_line = prime_workflow(
   confirm_partial_file_else_throw,
   recurse_for_any_nested_partials,
   retrieve_toplevel_partial,
+  identify_content_subpath,
+  get_content_file_subset,
   generate_items_else_multiply,
   set_pairs_if_tag_src_is_item,
   extend_lines
@@ -366,9 +398,10 @@ def complete_base_lines(cache):
   return cache
 
 def populate_with_values_if_list(cache):
-  if len(list(Pairs_Item.get().items())) > 0:
+  pairs_temp = cache['pairs_temp']
+  if len(list(pairs_temp.items())) > 0:
     file_path, lines = itemgetter('file_path', 'lines')(cache)
-    cache['lines'] = populate_lines(lines, Pairs_Item.get(), file_path)
+    cache['lines'] = populate_lines(lines, pairs_temp)
   return cache
 
 def replace_any_path_tag_if_page(cache):
@@ -387,16 +420,18 @@ complete_base_file = prime_workflow(
   replace_any_path_tag_if_page
 )
 
-def get_cache(tree_src, base_lines_path, base_lines):
+def get_cache(tree_src, base_lines_path, base_lines, tag = None):
   return {
     'tree_src': tree_src,
     'file_path': base_lines_path,
     'base_lines': base_lines,
+    'pairs_temp': {},
     'lines': [],
     'line': {
       'is_done': False,
       'is_item': False # relevant only for list generation where one .item is sought
-    }
+    },
+    'tag': tag # relevant only for list generation where list is list for tag
   }
 
 def complete_base(base_lines_path, tree_src):
@@ -422,7 +457,7 @@ def generate_pages(page_base_path, tree_src):
       page_content_path = get_source_path(page_subpath, page_content_name)
       page_content = read_by_path(tree_src['content'], page_content_path)
 
-      page_lines = populate_lines(page_base_lines, page_content, page_content_path)
+      page_lines = populate_lines(page_base_lines, page_content, tree_src)
       page_path = tree_src_lvl[page_content_name]['url']
       tree_src = write_by_path(tree_src, get_source_path('static', page_path), page_lines)
 
@@ -451,10 +486,12 @@ generate_list_line = prime_workflow(
   confirm_partial_file_else_throw
 )
 
+# workflow: generate_list_file
+
 def identify_listed_content(cache):
-  list_subpath = get_template_subpath(cache['file_path'])
-  cache['list_subpath'] = list_subpath
-  cache['tree_src_lvl'] = read_by_path(cache['tree_src']['content'], list_subpath)
+  subpath = get_template_subpath(cache['file_path'])
+  cache['subpath'] = subpath
+  cache['tree_src_lvl'] = read_by_path(cache['tree_src']['content'], subpath)
   return cache
 
 def extract_item_tag_values(cache):
@@ -468,7 +505,7 @@ def extract_item_tag_values(cache):
   return cache
 
 def generate_list_page_names(cache):
-  content_filenames = list(filter(lambda key: check_file_md(key), list(cache['tree_src_lvl'].keys())))
+  content_filenames = list(filter(lambda item: check_file_md(item[0]), cache['content_files']))
   list_pages_required = len(content_filenames) // cache['line']['tag_values']['number'] + 1
   cache['list_page_names'] = [f'page-{str(n + 1)}.html' for n in range(list_pages_required)]
   return cache
@@ -477,33 +514,50 @@ generate_list_file = prime_workflow(
   # accepts and returns cache dict
   identify_listed_content,
   extract_item_tag_values, # calls workflow generate_list_line
+  get_content_file_subset,
   generate_list_page_names,
   retrieve_toplevel_partial
 )
 
-def generate_list(list_base_path, tree_src):
+def generate_list(list_base_path, tree_src, tag = None):
 
   list_base_lines = read_by_path(tree_src, list_base_path)
 
-  cache_new = get_cache(tree_src, list_base_path, list_base_lines)
+  cache_new = get_cache(tree_src, list_base_path, list_base_lines, tag)
   cache_out = generate_list_file(cache_new) # workflow #, recurses
 
-  list_subpath, list_page_names, lines, lines_partial, line = itemgetter('list_subpath', 'list_page_names', 'lines', 'lines_partial', 'line')(cache_out)
-  index, indent, source, number = itemgetter('index', 'indent', 'source', 'number')(line['tag_values']) # number taken as number per list page
+  subpath, list_page_names, lines, lines_partial, line = itemgetter('subpath', 'list_page_names', 'lines', 'lines_partial', 'line')(cache_out)
+  index, indent, number = itemgetter('index', 'indent', 'number')(line['tag_values']) # number taken as number per list page
+
+  # add subpath part if list for tag
+  subpath = subpath + '/' + tag if tag else subpath
 
   for i in range(len(list_page_names)):
 
     offset = i * number
-    list_page_items = generate_items(lines_partial, tree_src['content'], source, number, offset)
+    list_page_items = generate_items(lines_partial, cache_out['content_files'], number, offset)
 
     list_page_lines = [*lines[0:index], *[get_with_indent(line, indent) for line in list_page_items], *lines[index:]]
 
     list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in pairs_list.items()))
-    list_page_lines = populate_lines(list_page_lines, list_page_pairs_i, list_base_path)
+    list_page_lines = populate_lines(list_page_lines, list_page_pairs_i)
 
-    list_page_path = get_source_path('static', list_subpath, list_page_names[i])
+    list_page_path = get_source_path('static', subpath, list_page_names[i])
     tree_src = write_by_path(tree_src, list_page_path, list_page_lines)
 
+  return tree_src
+
+def generate_lists(list_base_path, tree_src):
+
+  list_subpath = get_template_subpath(list_base_path)
+  tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
+
+  if '_tag_set' in tree_src_lvl:
+    tag_set = tree_src_lvl['_tag_set']
+    for tag in tag_set:
+      tree_src = generate_list(list_base_path, tree_src, tag)
+
+  tree_src = generate_list(list_base_path, tree_src)
   delete_by_path(tree_src, list_base_path)
   return tree_src
 
@@ -562,15 +616,27 @@ def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
   return tree_src
 
 def prepare_content(tree_src, root = 'content'):
+
+  # handle items skipped
   if exclude_content: return tree_src
+
   tree_src_lvl = read_by_path(tree_src, root)
+  tag_set = set([])
+
   for item_name in tree_src_lvl:
+
     item_path = get_source_path(root, item_name)
+    # handle item nesting
     if dict == type(tree_src_lvl[item_name]):
       tree_src = prepare_content(tree_src, item_path) # recurse
       continue
+    # handle content file
     if check_file_md(item_name):
       tree_src = format_content(item_path, tree_src)
+    if 'tags' in tree_src_lvl[item_name]:
+      tag_set.update(tree_src_lvl[item_name]['tags'])
+
+  tree_src = write_by_path(tree_src, root + '/_tag_set', tag_set)
   return tree_src
 
 def insert_partials(tree_src, root = '.'):
@@ -582,7 +648,6 @@ def insert_partials(tree_src, root = '.'):
       continue
     if check_file_html(item_name):
       tree_src = complete_base(item_path, tree_src)
-      Pairs_Item.reset()
   return tree_src
 
 def include_content(tree_src, root = '.'):
@@ -597,7 +662,7 @@ def include_content(tree_src, root = '.'):
     if check_file_page(item_name):
       tree_src = generate_pages(item_path, tree_src)
     if check_file_list(item_name):
-      tree_src = generate_list(item_path, tree_src)
+      tree_src = generate_lists(item_path, tree_src)
   return tree_src
 
 def output_static(tree_src, root = 'static'):
