@@ -62,7 +62,7 @@ pairs_list = {
 
 # - in .item templates inserted with 'tags'
 pairs_item_tag = {
-  'tag-url':  lambda subpath, tag: f'==>{subpath}{sep}{tag}{sep}index.html',
+  'tag-url':  lambda subpath, tag: f'==>{sep.join([subpath, tag, ""])}',
   'tag-name': lambda subpath, tag: tag
 }
 
@@ -130,16 +130,35 @@ def get_depth_part(subpath):
 def get_for_output(line, subpath):
   return line.replace(tag_path, get_depth_part(subpath))
 
+def handle_mkdir(path):
+  try:
+    mkdir(path)
+  except FileExistsError:
+    pass
+
 def ensure_out_dir(subdir = None):
   out_path = name_out if subdir is None else get_source_path(name_out, subdir)
   if not path.exists(out_path):
-    try:
-      mkdir(out_path)
-    except FileExistsError:
-      pass
+    handle_mkdir(out_path)
 
-def output_lines(filename, content):
-  with open(get_source_path(name_out, filename), 'w') as f:
+def get_output_url_values(path, to_save = False):
+  path_parts = path.split(sep)
+  path_bare = sep.join(path_parts[:-1])
+  filename_parts = path_parts[-1].split('.')
+  basename = '.'.join(filename_parts[:-1])
+  ext = filename_parts[-1]
+  is_feature = 'index' != basename and -1 == basename.find('page-') and ext not in ['css', 'js']
+  if not is_feature:
+    return (is_feature, path_bare, path)
+  path_bare_new = sep.join([path_bare, basename]) if path_bare else basename
+  path_full_new = sep.join([path_bare_new, 'index.html']) if to_save else path_bare_new + sep
+  return (is_feature, path_bare_new, path_full_new)
+
+def output_lines(path, content):
+  (is_feature, path_bare, path_full) = get_output_url_values(path, True)
+  if is_feature:
+    handle_mkdir(name_out + sep + path_bare)
+  with open(get_source_path(name_out, path_full), 'w') as f:
     f.write(content)
 
 def prime_workflow(*functions):
@@ -157,7 +176,7 @@ def get_page_path(content_path):
   content_path_parts = content_path.split(sep)
   page_subpath = sep.join(content_path_parts[1:-1])
   page_filename = '.'.join([*content_path_parts[-1].split('.')[0:-1], 'html'])
-  return sep.join([page_subpath, page_filename])
+  return get_output_url_values(sep.join([page_subpath, page_filename]))[2]
 
 def extract_img_src(markdown_str):
   start = markdown_str.index('(') + 1
@@ -242,7 +261,7 @@ def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required
     if 'tags' == number: lines.append(generate_tags(content_file, indent, source, tree_src)); continue
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
-    if 'url' == source: source_value = tag_path + source_value
+    if 'url' == source: source_value = sep.join([tag_path, source_value])
     if list == type(source_value): lines.extend(list(map(lambda line: get_with_indent(line, indent), source_value))); continue
     source_line = source_value if source_value and '\n' == source_value[-1] else source_value + '\n' if source_value else ''
     if source_line: lines.append(get_with_indent(source_line, indent))
@@ -411,7 +430,7 @@ def replace_any_path_tag_if_page(cache):
   is_page = check_file_page(file_path.split(sep)[-1])
   if is_page:
     subpath = get_template_subpath(file_path, -2) if is_page else ''
-    cache['lines'] = list(map(lambda line: get_for_output(line, subpath), lines))
+    cache['lines'] = list(map(lambda line: get_for_output(line, sep.join(['..', subpath])), lines))
   return cache
 
 complete_base_file = prime_workflow(
