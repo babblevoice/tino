@@ -62,7 +62,7 @@ pairs_list = {
 
 # - in .item templates inserted with 'tags'
 pairs_item_tag = {
-  'tag-url':  lambda subpath, tag: f'==>{subpath}{sep}{tag}{sep}page-1.html',
+  'tag-url':  lambda subpath, tag: f'==>{subpath}{sep}{tag}{sep}index.html',
   'tag-name': lambda subpath, tag: tag
 }
 
@@ -360,7 +360,8 @@ def set_pairs_if_tag_src_is_item(cache):
     subpath = cache['subpath']
     if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
       subpath = source.split(':')[0].replace('.', sep)
-    total = len(list(read_by_path(tree_src['content'], subpath).keys()))
+    content_filenames = list(filter(lambda key: '_' != key[0], read_by_path(tree_src['content'], subpath).keys())) # remove any '_tag_set'
+    total = len(content_filenames)
     cache = generate_template_pairs(cache, subpath, total, number)
   return cache
 
@@ -507,7 +508,9 @@ def extract_item_tag_values(cache):
 def generate_list_page_names(cache):
   content_filenames = list(filter(lambda item: check_file_md(item[0]), cache['content_files']))
   list_pages_required = len(content_filenames) // cache['line']['tag_values']['number'] + 1
-  cache['list_page_names'] = [f'page-{str(n + 1)}.html' for n in range(list_pages_required)]
+  list_page_names = ['index.html']
+  list_page_names.extend([f'page-{str(n + 2)}.html' for n in range(list_pages_required - 1)])
+  cache['list_page_names'] = list_page_names
   return cache
 
 generate_list_file = prime_workflow(
