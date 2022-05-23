@@ -31,7 +31,8 @@ server_loop_secs = 3
 
 # handle CLI options
 
-exclude_content = True if '--exclude-content' in argv else False
+exclude_content =    True if '--exclude-content'    in argv else False
+exclude_lists_main = True if '--exclude-lists-main' in argv else False
 
 
 # define additional available key-value pair handlers
@@ -579,7 +580,7 @@ def generate_lists(list_base_path, tree_src):
     for tag in tag_set:
       tree_src = generate_list(list_base_path, tree_src, tag)
 
-  tree_src = generate_list(list_base_path, tree_src)
+  if not exclude_lists_main: tree_src = generate_list(list_base_path, tree_src)
   delete_by_path(tree_src, list_base_path)
   return tree_src
 
