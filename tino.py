@@ -63,7 +63,7 @@ pairs_list = {
 
 # - in .item templates inserted with 'tags'
 pairs_item_tag = {
-  'tag-url':  lambda subpath, tag: f'==>{sep.join([subpath, tag, ""])}',
+  'tag-url':  lambda subpath, tag: f'==>{sep.join([subpath, url_part_prepare(tag), ""])}',
   'tag-name': lambda subpath, tag: tag
 }
 
@@ -124,6 +124,9 @@ def get_data_attr(stem, value):
 
 def get_with_indent(line, size):
   return line if '' == line.strip() else ' ' * size + line
+
+def url_part_prepare(string):
+  return sub(r'[^a-zA-Z0-9]', '-', string)
 
 def get_depth_part(subpath):
   return sep.join(['..'] * len(subpath.split(sep))) + sep if subpath else ''
@@ -190,12 +193,10 @@ def remove_a_hrefs(html_str):
 def get_tags_as_list(tag_string):
   tag_string_content = raw = tag_string.replace('[', '').replace(']', '')
   tags_raw = tag_string_content.split(',') if len(tag_string_content) > 0 else []
-  return list(map(lambda tag_raw: tag_raw.strip(), tags_raw))
+  return list(map(lambda tag_raw: tag_raw.replace('"', '').strip(), tags_raw))
 
 def extract_content(acc, line):
   line_stripped = line.strip()
-  # handle blank lines
-  if '' == line_stripped: return acc
   # handle head section
   # - head delimiters
   if '---' == line_stripped:
@@ -203,6 +204,8 @@ def extract_content(acc, line):
     acc['in_head'] = False; return acc
   # - key-value pairs
   if acc['in_head']:
+    # handle blank lines
+    if '' == line_stripped: return acc
     line_parts_raw = line.split(':')
     line_parts = [line_parts_raw[0], ':'.join(line_parts_raw[1:])]
     [key_raw, value_raw] = line_parts
@@ -213,7 +216,7 @@ def extract_content(acc, line):
   else:
     if not acc['pairs']['image'] and '![' == line_stripped[0:2] and ')' == line_stripped[-1]:
       acc['pairs']['image'] = extract_img_src(line_stripped)
-    if not acc['pairs']['intro'] and line_stripped[0] not in ['#', '!']:
+    if not acc['pairs']['intro'] and len(line_stripped) > 0 and line_stripped[0] not in ['#', '!']:
       acc['pairs']['intro'] = remove_a_hrefs(markdown(line))
     acc['lines_body'].append(line)
   return acc
@@ -231,7 +234,7 @@ def format_content(content_path, tree_src):
   cache_out = reduce(extract_content, content_file, cache_in)
   lines_body, pairs = itemgetter('lines_body', 'pairs')(cache_out)
 
-  pairs['body'] = list(map(lambda line: markdown(line) + '\n', lines_body))
+  pairs['body'] = list(map(lambda line: line + '\n', markdown(''.join(lines_body)).split('\n')))
   pairs['url'] = get_page_path(content_path)
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
@@ -381,7 +384,7 @@ def set_pairs_if_tag_src_is_item(cache):
     if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
       subpath = source.split(':')[0].replace('.', sep)
     content_filenames = list(filter(lambda key: '_' != key[0], read_by_path(tree_src['content'], subpath).keys())) # remove any '_tag_set'
-    total = len(content_filenames)
+    total = len(list(filter(lambda item: check_file_md(item), content_filenames)))
     cache = generate_template_pairs(cache, subpath, total, number)
   return cache
 
@@ -578,7 +581,7 @@ def generate_lists(list_base_path, tree_src):
   if '_tag_set' in tree_src_lvl:
     tag_set = tree_src_lvl['_tag_set']
     for tag in tag_set:
-      tree_src = generate_list(list_base_path, tree_src, tag)
+      tree_src = generate_list(list_base_path, tree_src, url_part_prepare(tag))
 
   if not exclude_lists_main: tree_src = generate_list(list_base_path, tree_src)
   delete_by_path(tree_src, list_base_path)
