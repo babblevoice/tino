@@ -23,13 +23,13 @@ Generate a website from a set of three source directories, producing complete HT
 - recursive insertion, for arbitrarily deep trees, of:
   - partials into HTML files using the `<== partial.html [n]` syntax
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
-- generation of paginated content lists based on `.list` templates, incl. population with pagination values
-- static file save to default output directory, for an arbitrarily deep static tree
+- generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory plus one for each content file tag used in the directory in its own `<tag name>/` subdirectory
+- static file save to default output directory, for variable output file types and an arbitrarily deep static tree
 - partial live serving - file tree update on change, without page reload
 
 ## Todo
 
-- extend to support tag equivalents, incl. list pages using a `.tags.list` template, outputting to a <tags>/ subdirectory for the content type
+- allow use of content file tag value in template file subpath
 - extend use of path tag to other nested files
 - revise remaining commands to equivalent Python method calls
 - extend live serving to reload page and revise to diff
@@ -152,9 +152,10 @@ The main file can be run for the default behaviour with the command `python3 tin
 
 A development live server listening at `localhost:8000` can be run with the command `python3 tino.py server`.
 
-##### Options
+#### Options
 
-- `--exclude-content` - do not load content files and pass any templates unpopulated to the output directory
+- `--exclude-content` - do not load content files, passing any templates unpopulated to the output directory
+- `--exclude-lists-main` - do not generate the main list for any content directory where a `.list` template is available, but generate lists for the tags in that category as usual
 
 ### Notes
 
