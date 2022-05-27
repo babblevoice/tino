@@ -190,10 +190,18 @@ def extract_img_src(markdown_str):
 def remove_a_hrefs(html_str):
   return sub(r' href=".*"', '', html_str)
 
-def get_tags_as_list(tag_string):
-  tag_string_content = raw = tag_string.replace('[', '').replace(']', '')
-  tags_raw = tag_string_content.split(',') if len(tag_string_content) > 0 else []
-  return list(map(lambda tag_raw: tag_raw.replace('"', '').strip(), tags_raw))
+def get_tags_as_list(tags_string):
+  tags_string_content = raw = tags_string.replace('[', '').replace(']', '')
+  tags_raw = tags_string_content.split(',') if len(tags_string_content) > 0 else []
+  return list(map(lambda tag_raw: tag_raw.replace('"', '').strip(), tags_raw)) # remove string delimiters
+
+def add_weight_to_dict(weights_dict, key, value_string):
+  value = None if not value_string else int(value_string)
+  if 'weight' == key:
+    weights_dict['others'] = value
+  else:
+    weights_dict[key[7:].replace('_', ' ')] = value
+  return weights_dict
 
 def extract_content(acc, line):
   line_stripped = line.strip()
@@ -204,14 +212,17 @@ def extract_content(acc, line):
     acc['in_head'] = False; return acc
   # - key-value pairs
   if acc['in_head']:
-    # handle blank lines
+    # handle blank line
     if '' == line_stripped: return acc
+    # set key and value
     line_parts_raw = line.split(':')
     line_parts = [line_parts_raw[0], ':'.join(line_parts_raw[1:])]
-    [key_raw, value_raw] = line_parts
-    key = key_raw.strip()
-    value = value_raw.strip()
-    acc['pairs'][key] = get_tags_as_list(value) if 'tags' == key else value.replace('"', '') # remove string delimiters
+    [key, value] = list(map(lambda part: part.strip(), line_parts))
+    # handle specifics
+    if 'tags' == key: acc['pairs']['tags'] = get_tags_as_list(value); return acc
+    if 'weight' == key[0:6]: acc['pairs']['weights'] = add_weight_to_dict(acc['pairs']['weights'], key, value); return acc
+    # handle remainder
+    acc['pairs'][key] = value.replace('"', '') # remove string delimiters
   # handle body section
   else:
     if not acc['pairs']['image'] and '![' == line_stripped[0:2] and ')' == line_stripped[-1]:
@@ -226,6 +237,7 @@ def format_content(content_path, tree_src):
     'in_head': False,
     'lines_body': [],
     'pairs': {
+      'weights': {},
       'image': '',
       'intro': ''
     }
@@ -234,7 +246,7 @@ def format_content(content_path, tree_src):
   cache_out = reduce(extract_content, content_file, cache_in)
   lines_body, pairs = itemgetter('lines_body', 'pairs')(cache_out)
 
-  pairs['body'] = list(map(lambda line: line + '\n', markdown(''.join(lines_body)).split('\n')))
+  pairs['body'] = list(map(lambda line: line + '\n', markdown(''.join(lines_body), extensions=['fenced_code', 'attr_list']).split('\n'))) # 'fenced_code' for code blocks using ```, 'attr_list' for links using #-prefixed heading
   pairs['url'] = get_page_path(content_path)
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
@@ -257,12 +269,29 @@ def generate_tags(content_file, indent, source, tree_src):
   lines = list(map(lambda line: get_with_indent(line, indent), lines))
   return ''.join(lines)
 
+def group_by_has_weight(tag):
+  def group(acc, file):
+    if tag in file[1]['weights']:
+      acc[0].append(file)
+    else:
+      acc[1].append(file)
+    return acc
+  return group
+
+def sort_content_files(content_files, tag):
+  content_files_sorted = sorted(content_files, key = lambda file: file[1]['date'], reverse = True)
+  if tag:
+    weighted, unweighted = reduce(group_by_has_weight(tag.lower()), content_files_sorted, ([], []))
+    weighted_sorted = sorted(weighted, key = lambda file: file[1]['weights'][tag.lower()])
+    content_files_sorted = [*weighted_sorted, *unweighted]
+  return content_files_sorted
+
 def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required for use of tags content value
   lines = []
   for base_line in base_lines:
     if tag_flow not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
-    if 'tags' == number: lines.append(generate_tags(content_file, indent, source, tree_src)); continue
+    if 'tags' == number and 'tags' in content_file: lines.append(generate_tags(content_file, indent, source, tree_src)); continue
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
     if 'url' == source: source_value = sep.join([tag_path, source_value])
@@ -272,8 +301,7 @@ def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required
   return lines
 
 def generate_items(base_lines, content_files, number = None, offset = 0):
-  content_files_sorted = sorted(content_files, key = lambda file: file[1]['date'], reverse = True)
-  content_files_batch = content_files_sorted[offset:offset + number]
+  content_files_batch = content_files[offset:offset + number]
   lines = []
   for content_file in content_files_batch:
     lines.extend(populate_lines(base_lines, content_file[1]))
@@ -362,7 +390,8 @@ def get_content_file_subset(cache):
     return cache
   content_items = list(read_by_path(cache['tree_src']['content'], cache['subpath']).items()) if cache['subpath'] else [] # returns list of str-dict tuples
   content_files = list(filter(lambda item: check_file_md(item[0]), content_items))
-  cache['content_files'] = list(filter(lambda item: 'tags' in item[1] and cache['tag'] in item[1]['tags'], content_files)) if cache['tag'] else content_files
+  content_files_sorted = sort_content_files(content_files, None if not 'tag' in cache else cache['tag'])
+  cache['content_files'] = list(filter(lambda item: 'tags' in item[1] and cache['tag'] in item[1]['tags'], content_files_sorted)) if cache['tag'] else content_files_sorted
   return cache
 
 def generate_items_else_multiply(cache):
