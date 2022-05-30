@@ -47,18 +47,19 @@ pairs_base = {
 
 # - in .list templates
 pairs_list = {
-  'first-url':       lambda names, i: names[0],
-  'prev-extra':      lambda names, i: '0' if i - 2 < 0 else str(0 + i - 1),
-  'prev-extra-attr': lambda names, i: get_data_attr('page-prev-extra', '0' if i - 2 < 0 else str(0 + i - 1)),
-  'prev-url':        lambda names, i: '' if i - 1 < 0 else names[i - 1],
-  'prev-n':          lambda names, i: '' if i - 1 < 0 else str(i),
-  'this-url':        lambda names, i: names[i],
-  'this-n':          lambda names, i: str(i + 1),
-  'next-url':        lambda names, i: '' if i + 1 >= len(names) else names[i + 1],
-  'next-n':          lambda names, i: '' if i + 1 >= len(names) else str(i + 2),
-  'next-extra':      lambda names, i: '0' if i + 2 >= len(names) else str(len(names) - i - 2),
-  'next-extra-attr': lambda names, i: get_data_attr('page-next-extra', '0' if i + 2 >= len(names) else str(len(names) - i - 2)),
-  'last-url':        lambda names, i: names[-1]
+  'this-list':       lambda s, names, i: sep.join(s.split(sep)[1:]).replace(sep, f' {sep} ').upper() if sep in s else s.upper(),
+  'first-url':       lambda s, names, i: names[0],
+  'prev-extra':      lambda s, names, i: '0' if i - 2 < 0 else str(0 + i - 1),
+  'prev-extra-attr': lambda s, names, i: get_data_attr('page-prev-extra', '0' if i - 2 < 0 else str(0 + i - 1)),
+  'prev-url':        lambda s, names, i: '' if i - 1 < 0 else names[i - 1],
+  'prev-n':          lambda s, names, i: '' if i - 1 < 0 else str(i),
+  'this-url':        lambda s, names, i: names[i],
+  'this-n':          lambda s, names, i: str(i + 1),
+  'next-url':        lambda s, names, i: '' if i + 1 >= len(names) else names[i + 1],
+  'next-n':          lambda s, names, i: '' if i + 1 >= len(names) else str(i + 2),
+  'next-extra':      lambda s, names, i: '0' if i + 2 >= len(names) else str(len(names) - i - 2),
+  'next-extra-attr': lambda s, names, i: get_data_attr('page-next-extra', '0' if i + 2 >= len(names) else str(len(names) - i - 2)),
+  'last-url':        lambda s, names, i: names[-1]
 }
 
 # - in .item templates inserted with 'tags'
@@ -107,7 +108,7 @@ def read_by_path_incl_tags(d, p):
   path_parts = p.split(sep)
   # final path part assumed to be content file tag value
   if 1 == len(path_parts) and path_parts[0] not in list(d.keys()):
-    return (dict(list(filter(lambda item: 'tags' in item[1] and path_parts[0] in list(map(lambda tag: tag.lower().replace(' ', '_').replace('/', '_'), item[1]['tags'])), d.items()))), path_parts[0])
+    return (dict(list(filter(lambda item: 'tags' in item[1] and path_parts[0] in list(map(lambda tag: tag.lower().replace(' ', '_').replace(sep, '_'), item[1]['tags'])), d.items()))), path_parts[0])
   # final path part assumed to be directory
   if 1 == len(path_parts):
     return (d[path_parts[0]], None)
@@ -136,7 +137,7 @@ def get_with_indent(line, size):
   return line if '' == line.strip() else ' ' * size + line
 
 def url_part_prepare(string):
-  return sub(r'[^a-zA-Z0-9]', '-', string)
+  return sub(r'[^a-zA-Z0-9]', '-', string.lower())
 
 def get_depth_part(subpath):
   return sep.join(['..'] * len(subpath.split(sep))) + sep if subpath else ''
@@ -210,7 +211,7 @@ def add_weight_to_dict(weights_dict, key, value_string):
   if 'weight' == key:
     weights_dict['others'] = value
   else:
-    weights_dict[key[7:].replace('/', '_')] = value
+    weights_dict[key[7:].replace(sep, '_')] = value
   return weights_dict
 
 def extract_content(acc, line):
@@ -402,7 +403,7 @@ def get_content_file_subset(cache):
   content_items = list(path_read[0].items())
   tag = path_read[1]
   content_files = list(filter(lambda item: check_file_md(item[0]), content_items))
-  content_files_sorted = sort_content_files(content_files, tag if tag else None if not 'tag' in cache else cache['tag'])
+  content_files_sorted = sort_content_files(content_files, tag if tag else None if not 'tag' in cache or cache['tag'] is None else cache['tag'].replace(' ', '_').replace(sep, '_'))
   cache['content_files'] = list(filter(lambda item: 'tags' in item[1] and cache['tag'] in item[1]['tags'], content_files_sorted)) if cache['tag'] else content_files_sorted
   return cache
 
@@ -598,7 +599,7 @@ def generate_list(list_base_path, tree_src, tag = None):
   index, indent, number = itemgetter('index', 'indent', 'number')(line['tag_values']) # number taken as number per list page
 
   # add subpath part if list for tag
-  subpath = subpath + '/' + tag if tag else subpath
+  subpath = subpath + sep + url_part_prepare(tag) if tag else subpath
 
   for i in range(len(list_page_names)):
 
@@ -607,7 +608,7 @@ def generate_list(list_base_path, tree_src, tag = None):
 
     list_page_lines = [*lines[0:index], *[get_with_indent(line, indent) for line in list_page_items], *lines[index:]]
 
-    list_page_pairs_i = (dict((k, v(list_page_names, i)) for k, v in pairs_list.items()))
+    list_page_pairs_i = (dict((k, v(tag if tag else subpath, list_page_names, i)) for k, v in pairs_list.items()))
     list_page_lines = populate_lines(list_page_lines, list_page_pairs_i)
 
     list_page_path = get_source_path('static', subpath, list_page_names[i])
@@ -623,7 +624,7 @@ def generate_lists(list_base_path, tree_src):
   if '_tag_set' in tree_src_lvl:
     tag_set = tree_src_lvl['_tag_set']
     for tag in tag_set:
-      tree_src = generate_list(list_base_path, tree_src, url_part_prepare(tag))
+      tree_src = generate_list(list_base_path, tree_src, tag)
 
   if not exclude_lists_main: tree_src = generate_list(list_base_path, tree_src)
   delete_by_path(tree_src, list_base_path)
