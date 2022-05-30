@@ -103,6 +103,16 @@ def read_by_path(d, p):
     return d[path_parts[0]]
   return read_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
 
+def read_by_path_incl_tags(d, p):
+  path_parts = p.split(sep)
+  # final path part assumed to be content file tag value
+  if 1 == len(path_parts) and path_parts[0] not in list(d.keys()):
+    return (dict(list(filter(lambda item: 'tags' in item[1] and path_parts[0] in list(map(lambda tag: tag.lower().replace(' ', '_').replace('/', '_'), item[1]['tags'])), d.items()))), path_parts[0])
+  # final path part assumed to be directory
+  if 1 == len(path_parts):
+    return (d[path_parts[0]], None)
+  return read_by_path_incl_tags(d[path_parts[0]], sep.join(path_parts[1:])) # recurses
+
 def write_by_path(d, p, value):
   path_parts = p.split(sep)
   if 1 == len(path_parts):
@@ -200,7 +210,7 @@ def add_weight_to_dict(weights_dict, key, value_string):
   if 'weight' == key:
     weights_dict['others'] = value
   else:
-    weights_dict[key[7:].replace('_', ' ')] = value
+    weights_dict[key[7:].replace('/', '_')] = value
   return weights_dict
 
 def extract_content(acc, line):
@@ -388,9 +398,11 @@ def identify_content_subpath(cache):
 def get_content_file_subset(cache):
   if cache['line']['is_done']:
     return cache
-  content_items = list(read_by_path(cache['tree_src']['content'], cache['subpath']).items()) if not exclude_content and cache['subpath'] else [] # returns list of str-dict tuples
+  path_read = read_by_path_incl_tags(cache['tree_src']['content'], cache['subpath']) if not exclude_content and cache['subpath'] else ({}, None) # returns list of str-dict tuples
+  content_items = list(path_read[0].items())
+  tag = path_read[1]
   content_files = list(filter(lambda item: check_file_md(item[0]), content_items))
-  content_files_sorted = sort_content_files(content_files, None if not 'tag' in cache else cache['tag'])
+  content_files_sorted = sort_content_files(content_files, tag if tag else None if not 'tag' in cache else cache['tag'])
   cache['content_files'] = list(filter(lambda item: 'tags' in item[1] and cache['tag'] in item[1]['tags'], content_files_sorted)) if cache['tag'] else content_files_sorted
   return cache
 
@@ -412,7 +424,8 @@ def set_pairs_if_tag_src_is_item(cache):
     subpath = cache['subpath']
     if '' == subpath: # source indicates use of generic .item template, i.e. prefix identifies subpath
       subpath = source.split(':')[0].replace('.', sep)
-    content_filenames = list(filter(lambda key: '_' != key[0], read_by_path(tree_src['content'], subpath).keys())) if not exclude_content else [] # remove any '_tag_set'
+    path_read = read_by_path_incl_tags(tree_src['content'], subpath) if not exclude_content else ({}, None)
+    content_filenames = list(filter(lambda key: '_' != key[0], path_read[0].keys())) # remove any '_tag_set'
     total = len(list(filter(lambda item: check_file_md(item), content_filenames)))
     cache = generate_template_pairs(cache, subpath, total, number)
   return cache
