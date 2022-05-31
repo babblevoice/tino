@@ -140,7 +140,7 @@ def url_part_prepare(string):
   return sub(r'[^a-zA-Z0-9]', '-', string.lower())
 
 def get_depth_part(subpath):
-  return sep.join(['..'] * len(subpath.split(sep))) + sep if subpath else ''
+  return sep.join(['..'] * len(subpath.split(sep)))
 
 def get_for_output(line, subpath):
   return line.replace(tag_path, get_depth_part(subpath))
@@ -257,7 +257,7 @@ def format_content(content_path, tree_src):
   cache_out = reduce(extract_content, content_file, cache_in)
   lines_body, pairs = itemgetter('lines_body', 'pairs')(cache_out)
 
-  pairs['body'] = list(map(lambda line: line + '\n', markdown(''.join(lines_body), extensions=['fenced_code', 'attr_list']).split('\n'))) # 'fenced_code' for code blocks using ```, 'attr_list' for links using #-prefixed heading
+  pairs['body'] = list(map(lambda line: line + '\n', markdown(''.join(lines_body), extensions=['tables', 'fenced_code', 'attr_list']).split('\n'))) # 'tables' for tables using - and |, 'fenced_code' for code blocks using ```, 'attr_list' for links using #-prefixed heading
   pairs['url'] = get_page_path(content_path)
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
@@ -269,6 +269,17 @@ def get_tag_values(line):
   source = args[0]
   number = 1 if 1 == len(args) else int(args[1]) if args[1] not in ['all', 'tags'] else 'tags' if 'tags' == args[1] else None
   return (indent, source, number)
+
+def generate_tag0_list(content_file, indent, source, tree_src):
+  tag0 = content_file['tags'][0] if 'tags' in content_file and len(content_file['tags']) > 0 else None
+  subpath_raw, source_filename = source.split(':')
+  subpath = subpath_raw.replace('.', sep)
+  content_files = read_by_path_incl_tags(tree_src['content'], subpath.replace('tag0', tag0.replace(' ', '_').replace(sep, '_').lower()) if tag0 is not None else '')[0]
+  lines = []
+  for content_file in content_files.items():
+    lines.extend(populate_lines(read_by_path(tree_src['partials'], source_filename), content_file[1]))
+  lines = list(map(lambda line: get_with_indent(line, indent), lines))
+  return ''.join(lines)
 
 def generate_tags(content_file, indent, source, tree_src):
   lines = []
@@ -302,6 +313,7 @@ def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required
   for base_line in base_lines:
     if tag_flow not in base_line: lines.append(base_line); continue
     (indent, source, number) = get_tag_values(base_line)
+    if '.tag0:' in source: lines.append(generate_tag0_list(content_file, indent, source, tree_src)); continue
     if 'tags' == number and 'tags' in content_file: lines.append(generate_tags(content_file, indent, source, tree_src)); continue
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
@@ -365,6 +377,14 @@ def if_tag_src_is_generic_item_note(cache):
   # remove content type prefix from source if indicates generic .item template
   source = cache['line']['tag_values']['source']
   cache['line']['tag_values']['source_filename'] = source if 1 == len(source.split(':')) else source.split(':')[1]
+  return cache
+
+def if_generic_item_for_tag0_use_base(cache):
+  if cache['line']['is_done']:
+    return cache
+  source, source_filename = itemgetter('source', 'source_filename')(cache['line']['tag_values'])
+  if source_filename != source and 'tag0' in source.split(':')[0].split('.'):
+    return update_to_use_base_line(cache)
   return cache
 
 def confirm_partial_file_else_throw(cache):
@@ -444,6 +464,7 @@ complete_base_line = prime_workflow(
   if_tag_src_is_not_html_use_base,
   if_lines_are_item_list_use_base, # handling .list w/ .item in generate_list
   if_tag_src_is_generic_item_note,
+  if_generic_item_for_tag0_use_base,
   confirm_partial_file_else_throw,
   recurse_for_any_nested_partials,
   retrieve_toplevel_partial,
