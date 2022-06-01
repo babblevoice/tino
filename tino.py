@@ -15,7 +15,6 @@ from traceback import print_exc
 # - external library
 from markdown import markdown
 
-
 # set default values
 
 # - build
@@ -33,7 +32,7 @@ server_loop_secs = 3
 
 exclude_content =    True if '--exclude-content'    in argv else False
 exclude_lists_main = True if '--exclude-lists-main' in argv else False
-
+is_beta =            True if '--beta'               in argv else False
 
 # define additional available key-value pair handlers
 
@@ -152,7 +151,11 @@ def handle_mkdir(path):
     pass
 
 def ensure_out_dir(subdir = None):
-  out_path = name_out if subdir is None else get_source_path(name_out, subdir)
+  name_out_local = name_out
+  if is_beta:
+    name_out_local = name_out_local + sep + 'beta'
+    handle_mkdir(name_out)
+  out_path = name_out_local if subdir is None else get_source_path(name_out_local, subdir)
   if not path.exists(out_path):
     handle_mkdir(out_path)
 
@@ -170,10 +173,15 @@ def get_output_url_values(path, to_save = False):
   return (is_feature, path_bare_new, path_full_new)
 
 def output_lines(path, content):
+  name_out_local = name_out
   (is_feature, path_bare, path_full) = get_output_url_values(path, True)
+  if is_beta:
+    name_out_local = name_out_local + sep + 'beta'
+    handle_mkdir(name_out)
   if is_feature:
-    handle_mkdir(name_out + sep + path_bare)
-  with open(get_source_path(name_out, path_full), 'w') as f:
+    handle_mkdir(name_out_local + sep + path_bare)
+  source_path = get_source_path(name_out_local, path_full)
+  with open(source_path, 'w') as f:
     f.write(content)
 
 def prime_workflow(*functions):
@@ -318,6 +326,7 @@ def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
     if 'url' == source: source_value = sep.join([tag_path, source_value])
+    if 'photo' == source: source_value = tag_path + source_value
     if list == type(source_value): lines.extend(list(map(lambda line: get_with_indent(line, indent), source_value))); continue
     source_line = source_value if source_value and '\n' == source_value[-1] else source_value + '\n' if source_value else ''
     if source_line: lines.append(get_with_indent(source_line, indent))
@@ -652,15 +661,49 @@ def generate_lists(list_base_path, tree_src):
   return tree_src
 
 def init_output_dir():
+  name_out_local = name_out
+  if is_beta:
+    name_out_local = name_out + sep + 'beta'
   ensure_out_dir()
   if path.exists('static/assets'):
     ensure_out_dir('assets')
-    system(f'cp -r static/assets/* {name_out}/assets/')
+    system(f'cp -r static/assets/* {name_out_local}/assets/')
   if not exclude_content and path.exists('content/images'):
     ensure_out_dir('images')
-    system(f'cp -r content/images/* {name_out}/images/') #ln -s content/images/* {name_out}/images/')
+    system(f'cp -r content/images/* {name_out_local}/images/') #ln -s content/images/* {name_out}/images/')
 
 # workflow: finalise_content
+
+def add_beta_url_part(lines):
+  if is_beta:
+    lines_updated = []
+    for line in lines:
+      tag_path_i = line.find(tag_path)
+      if -1 != tag_path_i:
+        url_char_1_i = tag_path_i + 3
+        if sep == line[url_char_1_i]:
+          line = line.replace(tag_path + sep, tag_path + sep + 'beta' + sep)
+          lines_updated.append(line)
+          continue
+      else:
+        href_i = line.find('href="')
+        if -1 != href_i:
+          url_char_1_i = href_i + 6
+          if sep == line[url_char_1_i]:
+            line = line.replace('href="' + sep, 'href="' + sep + 'beta' + sep)
+            lines_updated.append(line)
+            continue
+        else:
+          src_i = line.find('src="')
+          if -1 != src_i:
+            url_char_1_i = src_i + 5
+            if sep == line[url_char_1_i]:
+              line = line.replace('src="' + sep, 'src="' + sep + 'beta' + sep)
+              lines_updated.append(line)
+              continue
+      lines_updated.append(line)
+    return lines_updated
+  return lines
 
 def remove_path_tags(lines):
   return list(map(lambda line: line.replace(tag_path, ''), lines))
@@ -670,6 +713,7 @@ def join_lines(lines):
 
 finalise_content = prime_workflow(
   # accepts and returns lines list
+  add_beta_url_part,
   remove_path_tags,
   join_lines
 )
