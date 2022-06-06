@@ -14,6 +14,7 @@ from traceback import print_exc
 
 # - external library
 from markdown import markdown
+from css_html_js_minify import process_single_css_file #, process_single_js_file
 
 # set default values
 
@@ -183,6 +184,11 @@ def output_lines(path, content):
   source_path = get_source_path(name_out_local, path_full)
   with open(source_path, 'w') as f:
     f.write(content)
+  if 'css' == path_full.split('.')[-1]:
+    process_single_css_file(source_path, overwrite=True)
+#  # js minification not verified locally
+#  if 'js' == path_full.split('.')[-1]:
+#    process_single_js_file(source_path, overwrite=True)
 
 def prime_workflow(*functions):
   '''Returns function returning result of data passed to functions chained'''
@@ -675,6 +681,7 @@ def init_output_dir():
 # workflow: finalise_content
 
 def add_beta_url_part(lines):
+  # TODO: reduce duplication
   if is_beta:
     lines_updated = []
     for line in lines:
@@ -690,6 +697,8 @@ def add_beta_url_part(lines):
         if -1 != href_i:
           url_char_1_i = href_i + 6
           if sep == line[url_char_1_i]:
+            if '/api' == line[url_char_1_i:url_char_1_i + 4] or '/files' == line[url_char_1_i:url_char_1_i + 6]:
+              lines_updated.append(line); continue
             line = line.replace('href="' + sep, 'href="' + sep + 'beta' + sep)
             lines_updated.append(line)
             continue
@@ -698,6 +707,8 @@ def add_beta_url_part(lines):
           if -1 != src_i:
             url_char_1_i = src_i + 5
             if sep == line[url_char_1_i]:
+              if '/api' == line[url_char_1_i:url_char_1_i + 4] or '/files' == line[url_char_1_i:url_char_1_i + 6]:
+                lines_updated.append(line); continue
               line = line.replace('src="' + sep, 'src="' + sep + 'beta' + sep)
               lines_updated.append(line)
               continue
