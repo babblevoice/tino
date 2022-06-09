@@ -29,6 +29,7 @@ Generate a website from a set of three source directories, producing complete HT
 
 ## Todo
 
+- revise the `exclude-lists-main` option to default behaviour
 - allow use of content file tag value in template file subpath
 - extend use of path tag to other nested files
 - revise remaining commands to equivalent Python method calls
@@ -69,6 +70,8 @@ For example:
 </ul>
 ```
 
+If the content file includes a `tags` key, this key can be used in place of n to generate one item for each tag. See [Additional values](#additional-values) below for the values available for use in that template.
+
 ##### Path inclusion
 
 Default path inclusion syntax for path parts to root is `==>`. For example, the attribute `href="==>assets/logo.svg"` in a `.page` template for blog/news/, i.e. for a page two levels deep, becomes in the output file `href="../../assets/logo.svg"`.
@@ -99,7 +102,7 @@ Available template types:
 Specifically:
 
 - any HTML file in static/ with a name of the form type.page.html is a template to be populated with values from the content subdirectory of that type, e.g. blog.news.item.html from files in content/blog/news/; one output file is to be generated per file in the subdirectory, each named for the source content file, e.g. content/blog/news/post1.md becoming blog/news/post1.html
-- any HTML file in partials/ with a name of the form [type.]item.description.html is a template to be populated with values from the content subdirectory of that type, if the type is present, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item; if no type is present in the name, this is provided in the item inclusion syntax by prefixing the name with the type followed by a colon (':'), e.g. `<== type:item.description.html`
+- any HTML file in partials/ with a name of the form [type.]item.description.html is a template to be populated with values from the content subdirectory of that type, if the type is present, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item; if no type is present in the name, this is provided in the item inclusion syntax by prefixing the name with the type followed by a colon (':'), e.g. `<== type:item.description.html`; in a `.page` template the final element of the content subpath may be `tag0` to indicate any content file tagged with the first tag (i.e. the tag at index 0) in the list of tags for the current content file
 - any HTML file in static/ with a name of the form type.list.html is a template to be completed with the content of one `.item` file in partials/, each `.item` generated once per file in the content subdirectory of that type, e.g. blog.news.list.html relates to files in content/blog/news/; one output file is to be generated per page of the paginated list, each currently named `page-` plus the page number, e.g. content/blog/news/page-1.html for the first
 
 ##### Additional values
@@ -118,8 +121,14 @@ The following values are available for use in files applying `.item` templates, 
 - `.extra` - the number of content files of the type not used in the file, preceded with the dot-separated type, e.g. blog.news.extra
 - `.extra-attr` - the number of content files of the type not used in the file as the value in an attribute named by default `data-type-extra`, preceded with the dot-separated type, e.g. blog.news.extra-attr
 
+The following items are available for use in `.item` templates inserted with the `tags` key:
+
+- `tag-url` - the URL of the list page generated for the given tag
+- `tag-name` - the tag name
+
 The following values are available for use in `.list` templates for the purpose of populating control elements:
 
+- `this-list` - the spaced subpath of the current list page
 - `first-url` - the URL of the output file for the first list page of the set
 - `last-url` - the URL of the output file for the last list page of the set
 - `prev-url` - the URL of the output file for the previous list page in the set
