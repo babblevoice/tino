@@ -2,7 +2,8 @@
 
 # - standard library
 from sys import argv, exit
-from os import system, listdir, mkdir, path, sep, kill
+from os import devnull, system, listdir, mkdir, path, sep, kill
+from contextlib import redirect_stdout
 from re import sub
 from functools import reduce
 from operator import itemgetter
@@ -12,7 +13,7 @@ from subprocess import Popen, signal
 from time import sleep, time
 from traceback import print_exc
 
-# - external library
+# - external libraries
 from markdown import markdown
 from css_html_js_minify import process_single_css_file #, process_single_js_file
 
@@ -47,7 +48,7 @@ pairs_base = {
 
 # - in .list templates
 pairs_list = {
-  'this-list':       lambda s, names, i: sep.join(s.split(sep)[1:]).replace(sep, f' {sep} ').upper() if sep in s else s.upper(),
+  'this-list':       lambda s, names, i: sep.join(s.split(sep)[1:]).replace(sep, f' {sep} ') if sep in s else s,
   'first-url':       lambda s, names, i: names[0],
   'prev-extra':      lambda s, names, i: '0' if i - 2 < 0 else str(0 + i - 1),
   'prev-extra-attr': lambda s, names, i: get_data_attr('page-prev-extra', '0' if i - 2 < 0 else str(0 + i - 1)),
@@ -185,7 +186,8 @@ def output_lines(path, content):
   with open(source_path, 'w') as f:
     f.write(content)
   if 'css' == path_full.split('.')[-1]:
-    process_single_css_file(source_path, overwrite=True)
+    with open(devnull, "w") as f, redirect_stdout(f):
+      process_single_css_file(source_path, overwrite=True)
 #  # js minification not verified locally
 #  if 'js' == path_full.split('.')[-1]:
 #    process_single_js_file(source_path, overwrite=True)
@@ -781,7 +783,7 @@ def prepare_content(tree_src, root = 'content'):
     if 'tags' in tree_src_lvl[item_name]:
       tag_set.update(tree_src_lvl[item_name]['tags'])
 
-  tree_src = write_by_path(tree_src, root + '/_tag_set', tag_set)
+  tree_src = write_by_path(tree_src, root + '/_tag_set', list(tag_set))
   return tree_src
 
 def insert_partials(tree_src, root = '.'):
