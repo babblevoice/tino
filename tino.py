@@ -613,7 +613,7 @@ def generate_list_page_names(cache):
   content_filenames = list(filter(lambda item: check_file_md(item[0]), cache['content_files']))
   list_pages_required = len(content_filenames) // cache['line']['tag_values']['number'] + 1
   list_page_names = ['index.html']
-  list_page_names.extend([f'page-{str(n + 2)}.html' for n in range(list_pages_required - 1)])
+  list_page_names.extend([f'page-{str(n + 2)}{sep}index.html' for n in range(list_pages_required - 1)])
   cache['list_page_names'] = list_page_names
   return cache
 
@@ -646,7 +646,8 @@ def generate_list(list_base_path, tree_src, tag = None):
 
     list_page_lines = [*lines[0:index], *[get_with_indent(line, indent) for line in list_page_items], *lines[index:]]
 
-    list_page_pairs_i = (dict((k, v(tag if tag else subpath, list_page_names, i)) for k, v in pairs_list.items()))
+    list_page_names_url = list(map(lambda name: sep + sep.join([subpath, name]) if 1 == len(name.split(sep)) else sep + sep.join([subpath, *name.split(sep)[:-1]]) + sep, list_page_names))
+    list_page_pairs_i = (dict((k, v(tag if tag else subpath, list_page_names_url, i)) for k, v in pairs_list.items()))
     list_page_lines = populate_lines(list_page_lines, list_page_pairs_i)
 
     list_page_path = get_source_path('static', subpath, list_page_names[i])
