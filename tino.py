@@ -66,7 +66,7 @@ pairs_list = {
 
 # - in .item templates inserted with 'tags'
 pairs_item_tag = {
-  'tag-url':  lambda subpath, tag: f'==>{sep.join([subpath, url_part_prepare(tag), ""])}',
+  'tag-url':  lambda subpath, tag: f'{sep}{sep.join([subpath, url_part_prepare(tag), ""])}',
   'tag-name': lambda subpath, tag: tag
 }
 
@@ -301,7 +301,7 @@ def generate_tag0_list(content_file, indent, source, tree_src):
 
 def generate_tags(content_file, indent, source, tree_src):
   lines = []
-  subpath = source.split(".")[0]
+  subpath = source.split(".")[0].split(sep)[-1]
   tags = content_file['tags']
   for tag in tags:
     tag_item_pairs_i = (dict((k, v(subpath, tag)) for k, v in pairs_item_tag.items()))
