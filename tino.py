@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 from re import sub
 from functools import reduce
 from operator import itemgetter
+from datetime import datetime
 from copy import deepcopy
 #   - for server option
 from subprocess import Popen, signal
@@ -275,6 +276,7 @@ def format_content(content_path, tree_src):
 
   pairs['body'] = list(map(lambda line: line + '\n', markdown(''.join(lines_body), extensions=['tables', 'fenced_code', 'attr_list']).split('\n'))) # 'tables' for tables using - and |, 'fenced_code' for code blocks using ```, 'attr_list' for links using #-prefixed heading
   pairs['url'] = get_page_path(content_path)
+  if 'date' in pairs and pairs['date']: pairs['date-expanded-uk'] = datetime.strptime(pairs['date'], "%Y-%m-%d").strftime("%d %B %Y")
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
 
