@@ -167,11 +167,13 @@ Once complete, all files in the static/ directory are copied into the default ou
 
 ### CLI commands
 
-The main file can be run for the default behaviour with the command `python3 tino.py`.
+The main file can be run for the default behaviour with the command `python3 path/to/tino`, or `path/to/tino` if the python3 executable is located in the /usr/bin/ directory, or `tino` if python3 is in /usr/bin/ and the main file is in the /bin/ directory.
+
+If python3 is located elsewhere, simply modify the path in the hashbang at the top of the main file accordingly.
 
 #### Development
 
-A development live server listening at `localhost:8000` can be run with the command `python3 tino.py server`.
+A development live server listening at `localhost:8000` can be run with the command `python3 path/to/tino server`, `path/to/tino server` or `tino server`, per the above on file location.
 
 #### Options
 
