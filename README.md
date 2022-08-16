@@ -23,13 +23,12 @@ Generate a website from a set of three source directories, producing complete HT
 - recursive insertion, for arbitrarily deep trees, of:
   - partials into HTML files using the `<== partial.html [n]` syntax
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
-- generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory plus one for each content file tag used in the directory in its own `<tag name>/` subdirectory
+- generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory if no override file present plus one for each content file tag used in the directory in its own `<tag name>/` subdirectory
 - static file save to default output directory, for variable output file types and an arbitrarily deep static tree
 - partial live serving - file tree update on change, without page reload
 
 ## Todo
 
-- revise the `exclude-lists-main` option to default behaviour
 - allow use of content file tag value in template file subpath
 - extend use of path tag to other nested files
 - revise remaining commands to equivalent Python method calls
@@ -114,7 +113,7 @@ Specifically:
 
 - any HTML file in static/ with a name of the form type.page.html is a template to be populated with values from the content subdirectory of that type, e.g. blog.news.item.html from files in content/blog/news/; one output file is to be generated per file in the subdirectory, each named for the source content file, e.g. content/blog/news/post1.md becoming blog/news/post1.html
 - any HTML file in partials/ with a name of the form [type.]item.description.html is a template to be populated with values from the content subdirectory of that type, if the type is present, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item; if no type is present in the name, this is provided in the item inclusion syntax by prefixing the name with the type followed by a colon (':'), e.g. `<== type:item.description.html`; in a `.page` template the final element of the content subpath may be `tag0` to indicate any content file tagged with the first tag (i.e. the tag at index 0) in the list of tags for the current content file
-- any HTML file in static/ with a name of the form type.list.html is a template to be completed with the content of one `.item` file in partials/, each `.item` generated once per file in the content subdirectory of that type, e.g. blog.news.list.html relates to files in content/blog/news/; one output file is to be generated per page of the paginated list, each currently named `page-` plus the page number, e.g. content/blog/news/page-1.html for the first
+- any HTML file in static/ with a name of the form type.list.html is a template to be completed with the content of one `.item` file in partials/, each `.item` generated once per file in the content subdirectory of that type, e.g. blog.news.list.html relates to files in content/blog/news/; one output file is to be generated per page of the paginated list, each currently named `page-` plus the page number, e.g. content/blog/news/page-1.html for the first; the main list for a content subdirectory is not generated where an override file - a file named for that content directory - is present in static/, e.g. a list for content/blog/ is not created if blog.html is present
 
 ##### Additional values
 
@@ -178,7 +177,6 @@ A development live server listening at `localhost:8000` can be run with the comm
 #### Options
 
 - `--exclude-content` - do not load content files, passing any templates unpopulated to the output directory
-- `--exclude-lists-main` - do not generate the main list for any content directory where a `.list` template is available, but generate lists for the tags in that category as usual
 
 ### Notes
 
