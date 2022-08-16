@@ -32,12 +32,10 @@ name_out = 'public'
 # - serve
 server_loop_secs = 3
 
-
 # handle CLI options
 
-exclude_content =    True if '--exclude-content'    in argv else False
-exclude_lists_main = True if '--exclude-lists-main' in argv else False
-is_beta =            True if '--beta'               in argv else False
+exclude_content = True if '--exclude-content' in argv else False
+is_beta =         True if '--beta'            in argv else False
 
 # define additional available key-value pair handlers
 
@@ -664,13 +662,18 @@ def generate_lists(list_base_path, tree_src):
   list_subpath = get_template_subpath(list_base_path)
   tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
 
+  # generate one list for each subpath tag, if any
   if '_tag_set' in tree_src_lvl:
     tag_set = tree_src_lvl['_tag_set']
     for tag in tag_set:
       tree_src = generate_list(list_base_path, tree_src, tag)
 
-  if not exclude_lists_main: tree_src = generate_list(list_base_path, tree_src)
+  # generate subpath main list if no override file
+  list_override = get_template_subpath(list_base_path) + ".html"
+  if list_override not in tree_src['static']:
+    tree_src = generate_list(list_base_path, tree_src)
   delete_by_path(tree_src, list_base_path)
+
   return tree_src
 
 def init_output_dir():
@@ -803,18 +806,26 @@ def insert_partials(tree_src, root = '.'):
   return tree_src
 
 def include_content(tree_src, root = '.'):
+
+  # handle items skipped
   if exclude_content: return tree_src
+
   tree_src_copy = deepcopy(tree_src) # allow for dict size change on iteration
   tree_src_lvl = tree_src_copy if '.' == root else read_by_path(tree_src_copy, get_source_path(root))
+
   for item_name in tree_src_lvl:
+
     item_path = get_source_path(root, item_name)
+    # handle item nesting
     if dict == type(tree_src_lvl[item_name]) and not check_file_md(item_name):
       tree_src = include_content(tree_src, item_path) # recurse
       continue
+    # handle template file
     if check_file_page(item_name):
       tree_src = generate_pages(item_path, tree_src)
     if check_file_list(item_name):
       tree_src = generate_lists(item_path, tree_src)
+
   return tree_src
 
 def output_static(tree_src, root = 'static'):
