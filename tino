@@ -66,7 +66,7 @@ pairs_list = {
 
 # - in .item templates inserted with 'tags'
 pairs_item_tag = {
-  'tag-url':  lambda subpath, tag: f'{sep}{sep.join([subpath, url_part_prepare(tag), ""])}',
+  'tag-url':  lambda subpath, tag: f'{sep}{sep.join([subpath, "tags", url_part_prepare(tag), ""])}',
   'tag-name': lambda subpath, tag: tag
 }
 
@@ -657,7 +657,7 @@ def generate_list(list_base_path, tree_src, tag = None):
   index, indent, number = itemgetter('index', 'indent', 'number')(line['tag_values']) # number taken as number per list page
 
   # add subpath part if list for tag
-  subpath = subpath + sep + url_part_prepare(tag) if tag else subpath
+  subpath = sep.join([subpath, "tags", url_part_prepare(tag)]) if tag else subpath
 
   for i in range(len(list_page_names)):
 
