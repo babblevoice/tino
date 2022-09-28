@@ -72,12 +72,16 @@ pairs_item_tag = {
 
 # define utilities
 
+# - source file handling
+
 def get_source_file(path):
   with open(path, 'r') as f:
     return f.readlines()
 
 def get_source_path(root, *parts):
   return path.join(root if '.' != root[0] else root.lstrip('.'), *parts)
+
+# - file type checking
 
 def check_file_type(ext):
   return lambda filename: ext == filename.split('.')[-1]
@@ -94,6 +98,8 @@ def check_file_role(infix, index = -2): # default index value for .page and .lis
 check_file_page = check_file_role('page')
 check_file_item = check_file_role('item', -3)
 check_file_list = check_file_role('list')
+
+# - file tree interaction
 
 def get_template_subpath(p, stop = -2): # default stop value for .page and .list; -3 for .item
   filename = p.split(sep)[-1]
@@ -132,6 +138,8 @@ def delete_by_path(d, p):
     return
   delete_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
 
+# - string transformation
+
 def get_data_attr(stem, value):
   return f'{pre_attr}{stem}="{value}"'
 
@@ -146,6 +154,8 @@ def get_depth_part(subpath):
 
 def get_for_output(line, subpath):
   return line.replace(tag_path, get_depth_part(subpath))
+
+# - output generation
 
 def handle_mkdir(path):
   try:
@@ -193,6 +203,8 @@ def output_lines(path, content):
 #  if 'js' == path_full.split('.')[-1]:
 #    process_single_js_file(source_path, overwrite=True)
 
+# - primary function combination
+
 def prime_workflow(*functions):
   '''Returns function returning result of data passed to functions chained'''
   def flow(data = None):
@@ -203,6 +215,8 @@ def prime_workflow(*functions):
 
 
 # define processors
+
+# - content preparation
 
 def get_page_path(content_path):
   content_path_parts = content_path.split(sep)
@@ -280,13 +294,7 @@ def format_content(content_path, tree_src):
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
 
-def get_tag_values(line):
-  [indent_raw, args_raw] = line.split(tag_flow)
-  indent = len(indent_raw)
-  args = args_raw.strip().split(' ')
-  source = args[0]
-  number = 1 if 1 == len(args) else int(args[1]) if args[1] not in ['all', 'tags'] else 'tags' if 'tags' == args[1] else None
-  return (indent, source, number)
+# - content tag use
 
 def generate_tag0_list(content_file, indent, source, tree_src):
   tag0 = content_file['tags'][0] if 'tags' in content_file and len(content_file['tags']) > 0 else None
@@ -309,6 +317,8 @@ def generate_tags(content_file, indent, source, tree_src):
   lines = list(map(lambda line: get_with_indent(line, indent), lines))
   return ''.join(lines)
 
+# - content inclusion
+
 def group_by_has_weight(tag):
   def group(acc, file):
     if tag in file[1]['weights']:
@@ -325,6 +335,14 @@ def sort_content_files(content_files, tag):
     weighted_sorted = sorted(weighted, key = lambda file: file[1]['weights'][tag.lower()])
     content_files_sorted = [*weighted_sorted, *unweighted]
   return content_files_sorted
+
+def get_tag_values(line):
+  [indent_raw, args_raw] = line.split(tag_flow)
+  indent = len(indent_raw)
+  args = args_raw.strip().split(' ')
+  source = args[0]
+  number = 1 if 1 == len(args) else int(args[1]) if args[1] not in ['all', 'tags'] else 'tags' if 'tags' == args[1] else None
+  return (indent, source, number)
 
 def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required for use of tags content value
   lines = []
