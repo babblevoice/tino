@@ -26,8 +26,9 @@ from css_html_js_minify import process_single_css_file #, process_single_js_file
 tag_flow = '<==' # inserts a partial or a content file value, e.g. '<== partial.html [n]' or '<== key'
 tag_path = '==>' # provides the URL parts required to reach the root directory, e.g. '==>path/to/file'
 
-pre_attr = 'data-'
-name_out = 'public'
+output_dir_root_name = 'public'
+output_dir_tags_name = 'tags'
+output_attr_prefix   = 'data-'
 
 # - serve
 server_loop_secs = 3
@@ -66,7 +67,7 @@ pairs_list = {
 
 # - in .item templates inserted with 'tags'
 pairs_item_tag = {
-  'tag-url':  lambda subpath, tag: f'{sep}{sep.join([subpath, "tags", url_part_prepare(tag), ""])}',
+  'tag-url':  lambda subpath, tag: f'{sep}{sep.join([subpath, output_dir_tags_name, url_part_prepare(tag), ""])}',
   'tag-name': lambda subpath, tag: tag
 }
 
@@ -141,7 +142,7 @@ def delete_by_path(d, p):
 # - string transformation
 
 def get_data_attr(stem, value):
-  return f'{pre_attr}{stem}="{value}"'
+  return f'{output_attr_prefix}{stem}="{value}"'
 
 def get_with_indent(line, size):
   return line if '' == line.strip() else ' ' * size + line
@@ -164,11 +165,11 @@ def handle_mkdir(path):
     pass
 
 def ensure_out_dir(subdir = None):
-  name_out_local = name_out
+  output_dir_root_name_local = output_dir_root_name
   if is_beta:
-    name_out_local = name_out_local + sep + 'beta'
-    handle_mkdir(name_out)
-  out_path = name_out_local if subdir is None else get_source_path(name_out_local, subdir)
+    output_dir_root_name_local = output_dir_root_name_local + sep + 'beta'
+    handle_mkdir(output_dir_root_name)
+  out_path = output_dir_root_name_local if subdir is None else get_source_path(output_dir_root_name_local, subdir)
   if not path.exists(out_path):
     handle_mkdir(out_path)
 
@@ -186,14 +187,14 @@ def get_output_url_values(path, to_save = False):
   return (is_feature, path_bare_new, path_full_new)
 
 def output_lines(path, content):
-  name_out_local = name_out
+  output_dir_root_name_local = output_dir_root_name
   (is_feature, path_bare, path_full) = get_output_url_values(path, True)
   if is_beta:
-    name_out_local = name_out_local + sep + 'beta'
-    handle_mkdir(name_out)
+    output_dir_root_name_local = output_dir_root_name_local + sep + 'beta'
+    handle_mkdir(output_dir_root_name)
   if is_feature:
-    handle_mkdir(name_out_local + sep + path_bare)
-  source_path = get_source_path(name_out_local, path_full)
+    handle_mkdir(output_dir_root_name_local + sep + path_bare)
+  source_path = get_source_path(output_dir_root_name_local, path_full)
   with open(source_path, 'w') as f:
     f.write(content)
   if 'css' == path_full.split('.')[-1]:
@@ -660,7 +661,7 @@ def generate_list(list_base_path, tree_src, tag = None):
   index, indent, number = itemgetter('index', 'indent', 'number')(line['tag_values']) # number taken as number per list page
 
   # add subpath part if list for tag
-  subpath = sep.join([subpath, "tags", url_part_prepare(tag)]) if tag else subpath
+  subpath = sep.join([subpath, output_dir_tags_name, url_part_prepare(tag)]) if tag else subpath
 
   for i in range(len(list_page_names)):
 
@@ -698,16 +699,16 @@ def generate_lists(list_base_path, tree_src):
   return tree_src
 
 def init_output_dir():
-  name_out_local = name_out
+  output_dir_root_name_local = output_dir_root_name
   if is_beta:
-    name_out_local = name_out + sep + 'beta'
+    output_dir_root_name_local = output_dir_root_name + sep + 'beta'
   ensure_out_dir()
   if path.exists('static/assets'):
     ensure_out_dir('assets')
-    system(f'cp -r static/assets/* {name_out_local}/assets/')
+    system(f'cp -r static/assets/* {output_dir_root_name_local}/assets/')
   if not exclude_content and path.exists('content/images'):
     ensure_out_dir('images')
-    system(f'cp -r content/images/* {name_out_local}/images/') #ln -s content/images/* {name_out}/images/')
+    system(f'cp -r content/images/* {output_dir_root_name_local}/images/') #ln -s content/images/* {output_dir_root_name}/images/')
 
 # workflow: finalise_content
 
@@ -898,12 +899,12 @@ print(f'View site at localhost:8000 | Press Ctrl+C here to stop')
 pid = None
 try:
   server_loop_secs = float(server_loop_secs + server_loop_secs / 10)
-  pid = Popen(['python3', '-m', 'http.server', '-d', name_out]).pid
+  pid = Popen(['python3', '-m', 'http.server', '-d', output_dir_root_name]).pid
   while True:
     sleep(server_loop_secs)
     time_secs_current = int(str(time()).split('.')[0])
     if check_source_updated(time_secs_current):
-      print(f'Source modified - updating {name_out}/')
+      print(f'Source modified - updating {output_dir_root_name}/')
       generate_site()
 except KeyboardInterrupt:
   exit()
