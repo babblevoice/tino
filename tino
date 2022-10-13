@@ -230,8 +230,8 @@ def extract_img_src(markdown_str):
   end = markdown_str.rindex(')')
   return markdown_str[start:end]
 
-def remove_a_hrefs(html_str):
-  return sub(r' href=".*"', '', html_str)
+def remove_tags_a(html_str):
+  return sub(r'<a.*?>|</a>', '', html_str)
 
 def get_tags_as_list(tags_string):
   tags_string_content = raw = tags_string.replace('[', '').replace(']', '')
@@ -271,7 +271,7 @@ def extract_content(acc, line):
     if not acc['pairs']['image'] and '![' == line_stripped[0:2] and ')' == line_stripped[-1]:
       acc['pairs']['image'] = extract_img_src(line_stripped)
     if not acc['pairs']['intro'] and len(line_stripped) > 0 and line_stripped[0] not in ['#', '!']:
-      acc['pairs']['intro'] = remove_a_hrefs(markdown(line))
+      acc['pairs']['intro'] = remove_tags_a(markdown(line))
     acc['lines_body'].append(line)
   return acc
 
