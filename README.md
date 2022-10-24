@@ -184,11 +184,13 @@ If python3 is located elsewhere, simply modify the path in the hashbang at the t
 
 #### Development
 
-A development live server listening at `localhost:8000` can be run with the command `python3 path/to/tino server`, `path/to/tino server` or `tino server`, per the above on file location.
+A development live server listening by default at `localhost:8000` can be run with the command `python3 path/to/tino server`, `path/to/tino server` or `tino server`, per the above on file location.
 
 #### Options
 
 - `--exclude-content` - do not load content files, passing any templates unpopulated to the output directory
+- `--beta` - build a beta version, making the output directory beta/public/ and including in URLs the `beta` leading path part
+- `--port <n>` - listen instead on port `<n>`
 
 ### Notes
 
