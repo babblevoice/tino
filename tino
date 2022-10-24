@@ -36,7 +36,8 @@ server_loop_secs = 3
 # handle CLI options
 
 exclude_content = True if '--exclude-content' in argv else False
-is_beta =         True if '--beta'            in argv else False
+is_beta         = True if '--beta' in argv else False
+port            = "8000" if '--port' not in argv else argv[argv.index('--port') + 1]
 
 # define additional available key-value pair handlers
 
@@ -895,11 +896,11 @@ generate_site()
 if not 'server' in argv:
   exit()
 
-print(f'View site at localhost:8000 | Press Ctrl+C here to stop')
+print(f'View site at localhost:{port} | Press Ctrl+C here to stop')
 pid = None
 try:
   server_loop_secs = float(server_loop_secs + server_loop_secs / 10)
-  pid = Popen(['python3', '-m', 'http.server', '-d', output_dir_root_name]).pid
+  pid = Popen(['python3', '-m', 'http.server', '-d', output_dir_root_name, port]).pid
   while True:
     sleep(server_loop_secs)
     time_secs_current = int(str(time()).split('.')[0])
