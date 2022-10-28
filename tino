@@ -32,13 +32,16 @@ output_file_suffix_bust = '_' + datetime.now().strftime("%H%M%S%d%m%y") # _hhmms
 output_attr_prefix      = 'data-'
 
 # - serve
+server_port      = 8000
 server_loop_secs = 3
 
 # handle CLI options
 
 exclude_content = True if '--exclude-content' in argv else False
 is_beta         = True if '--beta' in argv else False
-port            = "8000" if '--port' not in argv else argv[argv.index('--port') + 1]
+
+server_port             = str(server_port)        if '--port' not in argv else argv[argv.index('--port') + 1]
+output_file_suffix_bust = output_file_suffix_bust if '--bust' not in argv else argv[argv.index('--bust') + 1]
 
 # define additional available key-value pair handlers
 
@@ -931,11 +934,11 @@ generate_site()
 if not 'server' in argv:
   exit()
 
-print(f'View site at localhost:{port} | Press Ctrl+C here to stop')
+print(f'View site at localhost:{server_port} | Press Ctrl+C here to stop')
 pid = None
 try:
   server_loop_secs = float(server_loop_secs + server_loop_secs / 10)
-  pid = Popen(['python3', '-m', 'http.server', '-d', output_dir_root_name, port]).pid
+  pid = Popen(['python3', '-m', 'http.server', '-d', output_dir_root_name, server_port]).pid
   while True:
     sleep(server_loop_secs)
     time_secs_current = int(str(time()).split('.')[0])
