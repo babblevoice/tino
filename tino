@@ -381,7 +381,7 @@ def populate_lines(base_lines, content_file, tree_src = {}): # tree_src required
     if source not in list(content_file.keys()): lines.append(base_line); continue #raise KeyError(f'No {source} for {content_path}')
     source_value = content_file[source]
     if 'url' == source: source_value = sep.join([tag_path, source_value])
-    if 'photo' == source: source_value = tag_path + source_value
+    if 'image' in source: source_value = tag_path + source_value
     if list == type(source_value): lines.extend(list(map(lambda line: get_with_indent(line, indent), source_value))); continue
     source_line = source_value if source_value and '\n' == source_value[-1] else source_value + '\n' if source_value else ''
     if source_line: lines.append(get_with_indent(source_line, indent))
