@@ -26,9 +26,10 @@ from css_html_js_minify import process_single_css_file #, process_single_js_file
 tag_flow = '<==' # inserts a partial or a content file value, e.g. '<== partial.html [n]' or '<== key'
 tag_path = '==>' # provides the URL parts required to reach the root directory, e.g. '==>path/to/file'
 
-output_dir_root_name = 'public'
-output_dir_tags_name = 'tags'
-output_attr_prefix   = 'data-'
+output_dir_root_name    = 'public'
+output_dir_tags_name    = 'tags'
+output_file_suffix_bust = '_' + datetime.now().strftime("%H%M%S%d%m%y") # _hhmmssddmmyy
+output_attr_prefix      = 'data-'
 
 # - serve
 server_loop_secs = 3
@@ -140,6 +141,14 @@ def delete_by_path(d, p):
     return
   delete_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
 
+def get_filepath_parts(path):
+  path_parts = path.split(sep)
+  path_bare = sep.join(path_parts[:-1])
+  filename_parts = path_parts[-1].split('.')
+  basename = '.'.join(filename_parts[:-1])
+  ext = filename_parts[-1]
+  return (path_bare, basename, ext)
+
 # - string transformation
 
 def get_data_attr(stem, value):
@@ -155,7 +164,10 @@ def get_depth_part(subpath):
   return sep.join(['..'] * len(subpath.split(sep)))
 
 def get_for_output(line, subpath):
-  return line.replace(tag_path, get_depth_part(subpath))
+  return line.replace(tag_path, tag_path + get_depth_part(subpath))
+
+def get_with_bust(path_bare, basename, ext):
+  return sep.join([path_bare, f'{basename}{output_file_suffix_bust}.{ext}'])
 
 # - output generation
 
@@ -175,13 +187,11 @@ def ensure_out_dir(subdir = None):
     handle_mkdir(out_path)
 
 def get_output_url_values(path, to_save = False):
-  path_parts = path.split(sep)
-  path_bare = sep.join(path_parts[:-1])
-  filename_parts = path_parts[-1].split('.')
-  basename = '.'.join(filename_parts[:-1])
-  ext = filename_parts[-1]
+  (path_bare, basename, ext) = get_filepath_parts(path)
   is_feature = 'index' != basename and -1 == basename.find('page-') and ext not in ['css', 'js']
   if not is_feature:
+    if ext in ['css', 'js']:
+      path = get_with_bust(path_bare, basename, ext)
     return (is_feature, path_bare, path)
   path_bare_new = sep.join([path_bare, basename]) if path_bare else basename
   path_full_new = sep.join([path_bare_new, 'index.html']) if to_save else path_bare_new + sep
@@ -713,6 +723,10 @@ def init_output_dir():
 
 # workflow: finalise_content
 
+def get_tagged_path_i(line):
+  tag_path_i = line.find(tag_path)
+  return tag_path_i + 3 if -1 != tag_path_i else None
+
 def add_beta_url_part(lines):
   # TODO: reduce duplication
   if is_beta:
@@ -749,6 +763,26 @@ def add_beta_url_part(lines):
     return lines_updated
   return lines
 
+def add_bust_url_part(lines):
+
+  lines_updated = []
+
+  for line in lines:
+    path_i = get_tagged_path_i(line)
+    # skip if no tagged path found or tagged path spans lines
+    if not path_i or not '"' in line[path_i:]:
+      lines_updated.append(line)
+      continue
+    line_rest = line[path_i:]
+    path = line_rest[:line_rest.index('"')]
+    (path_bare, basename, ext) = get_filepath_parts(path)
+    if ext in ['css', 'js']:
+      # update line to include bust part
+      line = line[:path_i] + get_with_bust(path_bare, basename, ext) + line[path_i + len(path):]
+    lines_updated.append(line)
+
+  return lines_updated
+
 def remove_path_tags(lines):
   return list(map(lambda line: line.replace(tag_path, ''), lines))
 
@@ -758,6 +792,7 @@ def join_lines(lines):
 finalise_content = prime_workflow(
   # accepts and returns lines list
   add_beta_url_part,
+  add_bust_url_part,
   remove_path_tags,
   join_lines
 )
