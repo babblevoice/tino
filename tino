@@ -35,7 +35,14 @@ output_attr_prefix      = 'data-'
 server_port      = 8000
 server_loop_secs = 3
 
+# - print
+shell_text_help = 'Usage: tino [ --beta | --bust <suffix> | --exclude-content | --port <n> | server / --help ]'
+
 # handle CLI options
+
+if '--help' in argv:
+  print(shell_text_help)
+  exit()
 
 exclude_content = True if '--exclude-content' in argv else False
 is_beta         = True if '--beta' in argv else False
