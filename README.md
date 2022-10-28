@@ -25,6 +25,7 @@ Generate a website from a set of three source directories, producing complete HT
   - partials into HTML files using the `<== partial.html [n]` syntax
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
 - generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory if no override file present plus one for each content file tag used in the directory in a subdirectory named by default `tags`
+- cache bust suffix insertion for CSS and JS file types
 - static file save to default output directory, for variable output file types and an arbitrarily deep static tree
 - partial live serving - file tree update on change, without page reload
 
@@ -96,6 +97,12 @@ body
 - `date` - `YYYY-MM-DD`
 - `tags` - `[ "tag 1", ... ]`
 
+###### Other special cases
+
+####### Images
+
+Any content file key containing the word `image` is assumed to refer to an image file in either assets/ or images/.
+
 ###### Additional values
 
 In addition to values provided in the meta section of the content file, the following are available for use:
@@ -161,6 +168,7 @@ The following default values are set close to the top of the main file:
 - path tag - `==>`
 - output root directory name - `public`
 - output tags directory name - `tags`
+- output file cache bust suffix - `_hhmmssddmmyy`, where `h`, `m`, `s`, `d`, `m` and `y` are the relevant digits for the current time (hour, minute and second) and date (day, month, year)
 - output attribute prefix - `data-`
 - server loop (seconds) - `3`
 
@@ -188,8 +196,10 @@ A development live server listening by default at `localhost:8000` can be run wi
 
 #### Options
 
-- `--exclude-content` - do not load content files, passing any templates unpopulated to the output directory
 - `--beta` - build a beta version, making the output directory beta/public/ and including in URLs the `beta` leading path part
+- `--bust <suffix>` - cache bust instead with `<suffix>`
+- `--exclude-content` - do not load content files, passing any templates unpopulated to the output directory
+- `--help` - print help text
 - `--port <n>` - listen instead on port `<n>`
 
 ### Notes
