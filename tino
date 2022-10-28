@@ -152,6 +152,12 @@ def get_filepath_parts(path):
   ext = filename_parts[-1]
   return (path_bare, basename, ext)
 
+# - string inspection
+
+def index_next_if_any(line, substr):
+  substr_i = line.find(substr)
+  return substr_i + len(substr) if -1 != substr_i else None
+
 # - string transformation
 
 def get_data_attr(stem, value):
@@ -171,6 +177,9 @@ def get_for_output(line, subpath):
 
 def get_with_bust(path_bare, basename, ext):
   return sep.join([path_bare, f'{basename}{output_file_suffix_bust}.{ext}'])
+
+def get_with_beta(line, substr):
+  return line.replace(substr + sep, substr + sep + 'beta' + sep)
 
 # - output generation
 
@@ -552,7 +561,7 @@ def replace_any_path_tag_if_page(cache):
   # replace any path tag in a .page template with URL parts sufficient to reach project root
   is_page = check_file_page(file_path.split(sep)[-1])
   if is_page:
-    subpath = get_template_subpath(file_path, -2) if is_page else ''
+    subpath = get_template_subpath(file_path, -2)
     cache['lines'] = list(map(lambda line: get_for_output(line, sep.join(['..', subpath])), lines))
   return cache
 
@@ -726,52 +735,35 @@ def init_output_dir():
 
 # workflow: finalise_content
 
-def get_tagged_path_i(line):
-  tag_path_i = line.find(tag_path)
-  return tag_path_i + 3 if -1 != tag_path_i else None
-
 def add_beta_url_part(lines):
-  # TODO: reduce duplication
-  if is_beta:
-    lines_updated = []
-    for line in lines:
-      tag_path_i = line.find(tag_path)
-      if -1 != tag_path_i:
-        url_char_1_i = tag_path_i + 3
-        if sep == line[url_char_1_i]:
-          line = line.replace(tag_path + sep, tag_path + sep + 'beta' + sep)
-          lines_updated.append(line)
-          continue
-      else:
-        href_i = line.find('href="')
-        if -1 != href_i:
-          url_char_1_i = href_i + 6
-          if sep == line[url_char_1_i]:
-            if '/api' == line[url_char_1_i:url_char_1_i + 4] or '/files' == line[url_char_1_i:url_char_1_i + 6]:
-              lines_updated.append(line); continue
-            line = line.replace('href="' + sep, 'href="' + sep + 'beta' + sep)
-            lines_updated.append(line)
-            continue
-        else:
-          src_i = line.find('src="')
-          if -1 != src_i:
-            url_char_1_i = src_i + 5
-            if sep == line[url_char_1_i]:
-              if '/api' == line[url_char_1_i:url_char_1_i + 4] or '/files' == line[url_char_1_i:url_char_1_i + 6]:
-                lines_updated.append(line); continue
-              line = line.replace('src="' + sep, 'src="' + sep + 'beta' + sep)
-              lines_updated.append(line)
-              continue
+
+  if not is_beta: return lines
+
+  lines_updated = []
+
+  for line in lines:
+    # handle tagged path
+    path_i = index_next_if_any(line, tag_path)
+    if path_i and sep == line[path_i]:
+      line = get_with_beta(line, tag_path)
       lines_updated.append(line)
-    return lines_updated
-  return lines
+      continue
+    # handle attributes in content body
+    for substr in ['src="', 'href="']:
+      substr_i = index_next_if_any(line, substr)
+      if substr_i and sep == line[substr_i] and\
+        '/api' != line[substr_i:substr_i + 4] and '/files' != line[substr_i:substr_i + 6]:
+          line = get_with_beta(line, substr)
+    lines_updated.append(line)
+
+  return lines_updated
 
 def add_bust_url_part(lines):
 
   lines_updated = []
 
   for line in lines:
-    path_i = get_tagged_path_i(line)
+    path_i = index_next_if_any(line, tag_path)
     # skip if no tagged path found or tagged path spans lines
     if not path_i or not '"' in line[path_i:]:
       lines_updated.append(line)
