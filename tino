@@ -119,6 +119,12 @@ def get_template_subpath(p, stop = -2): # default stop value for .page and .list
   filename_parts = filename.split('.')
   return sep.join(filename_parts[0:stop])
 
+def get_template_base_path_new(base_path_old, subpath_new):
+  base_path_old_parts = base_path_old.split(sep)
+  filename_old = base_path_old_parts[-1]
+  filename_old_non_subpath_parts = base_path_old_parts[-1].split('.')[1:]
+  return sep.join(base_path_old_parts[0:-1]) + sep + '.'.join([subpath_new, *filename_old_non_subpath_parts])
+
 def read_by_path(d, p):
   path_parts = p.split(sep)
   if 1 == len(path_parts):
@@ -249,6 +255,17 @@ def prime_workflow(*functions):
 
 # - content preparation
 
+def get_path_map(tree_src, item_name):
+  if '_map' not in tree_src:
+    tree_src['_map'] = {}
+  item_name_parts = item_name.split(':')
+  item_name = item_name_parts.pop()
+  for map_key in item_name_parts:
+    if map_key not in tree_src['_map'].keys():
+      tree_src['_map'][map_key] = []
+    tree_src['_map'][map_key].append(item_name)
+  return (tree_src, item_name)
+
 def get_page_path(content_path):
   content_path_parts = content_path.split(sep)
   page_subpath = sep.join(content_path_parts[1:-1])
@@ -263,10 +280,10 @@ def extract_img_src(markdown_str):
 def remove_tags_a(html_str):
   return sub(r'<a.*?>|</a>', '', html_str)
 
-def get_tags_as_list(tags_string):
-  tags_string_content = raw = tags_string.replace('[', '').replace(']', '')
-  tags_raw = tags_string_content.split(',') if len(tags_string_content) > 0 else []
-  return list(map(lambda tag_raw: tag_raw.replace('"', '').strip(), tags_raw)) # remove string delimiters
+def get_meta_list_as_list(list_meta_string):
+  list_meta_string_content = raw = list_meta_string.replace('[', '').replace(']', '')
+  list_meta_raw = list_meta_string_content.split(',') if len(list_meta_string_content) > 0 else []
+  return list(map(lambda item_meta_raw: item_meta_raw.replace('"', '').strip(), list_meta_raw)) # remove string delimiters
 
 def add_weight_to_dict(weights_dict, key, value_string):
   value = None if not value_string else int(value_string)
@@ -292,7 +309,7 @@ def extract_content(acc, line):
     line_parts = [line_parts_raw[0], ':'.join(line_parts_raw[1:])]
     [key, value] = list(map(lambda part: part.strip(), line_parts))
     # handle specifics
-    if 'tags' == key: acc['pairs']['tags'] = get_tags_as_list(value); return acc
+    if 'tags' == key: acc['pairs']['tags'] = get_meta_list_as_list(value); return acc
     if 'weight' == key[0:6]: acc['pairs']['weights'] = add_weight_to_dict(acc['pairs']['weights'], key, value); return acc
     # handle remainder
     acc['pairs'][key] = value.replace('"', '') # remove string delimiters
@@ -665,7 +682,7 @@ def extract_item_tag_values(cache):
 
 def generate_list_page_names(cache):
   content_filenames = list(filter(lambda item: check_file_md(item[0]), cache['content_files']))
-  list_pages_required = len(content_filenames) // cache['line']['tag_values']['number'] + 1
+  list_pages_required = len(content_filenames) // cache['line']['tag_values']['number'] + 1 # floor division
   list_page_names = ['index.html']
   list_page_names.extend([f'page-{str(n + 2)}{sep}index.html' for n in range(list_pages_required - 1)])
   cache['list_page_names'] = list_page_names
@@ -711,20 +728,34 @@ def generate_list(list_base_path, tree_src, tag = None):
 
 def generate_lists(list_base_path, tree_src):
 
-  list_subpath = get_template_subpath(list_base_path)
-  tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
+  list_base_subpath = get_template_subpath(list_base_path)
+  list_subpaths = [list_base_subpath] if list_base_subpath in tree_src['content'] else tree_src['content']['_map'][list_base_subpath]
 
-  # generate one list for each subpath tag, if any
-  if '_tag_set' in tree_src_lvl:
-    tag_set = tree_src_lvl['_tag_set']
-    for tag in tag_set:
-      tree_src = generate_list(list_base_path, tree_src, tag)
+  lines = read_by_path(tree_src, list_base_path)
+  # if one list template for multiple subpaths, no longer needed
+  if len(list_subpaths) > 1:
+    delete_by_path(tree_src, list_base_path)
 
-  # generate subpath main list if no override file
-  list_override = get_template_subpath(list_base_path) + ".html"
-  if list_override not in tree_src['static']:
-    tree_src = generate_list(list_base_path, tree_src)
-  delete_by_path(tree_src, list_base_path)
+  for list_subpath in list_subpaths:
+
+    # if one list template for multiple subpaths, copy
+    if len(list_subpaths) > 1:
+      list_base_path = get_template_base_path_new(list_base_path, list_subpath)
+      tree_src = write_by_path(tree_src, list_base_path, lines)
+
+    tree_src_lvl = read_by_path(tree_src['content'], list_subpath)
+
+    # generate one list for each subpath tag, if any
+    if '_tag_set' in tree_src_lvl:
+      tag_set = tree_src_lvl['_tag_set']
+      for tag in tag_set:
+        tree_src = generate_list(list_base_path, tree_src, tag)
+
+    # generate subpath main list if no override file
+    list_override = get_template_subpath(list_base_path) + ".html"
+    if list_override not in tree_src['static']:
+      tree_src = generate_list(list_base_path, tree_src)
+    delete_by_path(tree_src, list_base_path)
 
   return tree_src
 
@@ -823,6 +854,9 @@ def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
       continue
     # handle item nesting
     if path.isdir(item_path):
+      # handle subpath mapping
+      if ':' in item_name:
+        (tree_src, item_name) = get_path_map(tree_src, item_name)
       tree_src[item_name] = get_source_tree(listdir(item_path), item_path) # recurse
       continue
 
