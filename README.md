@@ -25,7 +25,7 @@ Generate a website from a set of three source directories, producing complete HT
   - partials into HTML files using the `<== partial.html [n]` syntax
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
 - generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory if no override file present plus one for each content file tag used in the directory in a subdirectory named by default `tags`
-- template reuse via content category mapping, for `.list` and `.item` templates
+- template reuse via content category mapping for all template types
 - cache bust suffix insertion for CSS and JS file types
 - static file save to default output directory, for variable output file types and an arbitrarily deep static tree
 - partial live serving - file tree update on change, without page reload
@@ -124,7 +124,7 @@ Specifically:
 
 #### Template reuse
 
-Each content type may be mapped to one or more group identifiers by naming the content subdirectory not `type` but `identifier_1[:indentifier_n]:type`, e.g. content/feed:blog. Each such identifier can then be used in place of the type in a `.list` and/or `.item` template name in order that the given template is used once for each of the mapped types, e.g. feed.list.html for content files in content/feed:blog.
+Each content type may be mapped to one or more group identifiers by naming the content subdirectory not `type` but `identifier_1[:indentifier_n]:type`, e.g. content/feed:blog. Each such identifier can then be used in place of the type in a `.list`, `.page` and/or `.item` template name in order that the given template is used once for each of the mapped types, e.g. feed.list.html for content files in content/feed:blog.
 
 ##### Additional values
 
