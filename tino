@@ -127,8 +127,10 @@ def get_template_base_path_new(base_path_old, subpath_new):
 
 def read_by_path(d, p):
   path_parts = p.split(sep)
-  if 1 == len(path_parts):
+  if 1 == len(path_parts) and path_parts[0] in d.keys():
     return d[path_parts[0]]
+  if 1 == len(path_parts):
+    return None
   return read_by_path(d[path_parts[0]], sep.join(path_parts[1:]))
 
 def read_by_path_incl_tags(d, p):
@@ -266,11 +268,16 @@ def get_path_map(tree_src, item_name):
     tree_src['_map'][map_key].append(item_name)
   return (tree_src, item_name)
 
-def get_page_path(content_path):
+def get_content_path_parts(content_path):
   content_path_parts = content_path.split(sep)
-  page_subpath = sep.join(content_path_parts[1:-1])
-  page_filename = '.'.join([*content_path_parts[-1].split('.')[0:-1], 'html'])
-  return get_output_url_values(sep.join([page_subpath, page_filename]))[2]
+  content_subpath = sep.join(content_path_parts[1:-1])
+  content_filename = '.'.join([content_path_parts[-1]])
+  return (content_subpath, content_filename)
+
+def get_page_path(content_path):
+  (content_subpath, content_filename) = get_content_path_parts(content_path)
+  page_filename = '.'.join([*content_filename.split('.')[0:-1], 'html'])
+  return get_output_url_values(sep.join([content_subpath, page_filename]))[2]
 
 def extract_img_src(markdown_str):
   start = markdown_str.index('(') + 1
@@ -327,6 +334,7 @@ def format_content(content_path, tree_src):
     'in_head': False,
     'lines_body': [],
     'pairs': {
+      'subpath': get_content_path_parts(content_path)[0],
       'weights': {},
       'image': '',
       'intro': ''
@@ -360,7 +368,7 @@ def generate_tag0_list(content_file, indent, source, tree_src):
 
 def generate_tags(content_file, indent, source, tree_src):
   lines = []
-  subpath = source.split(".")[0].split(sep)[-1]
+  subpath = content_file['subpath']
   tags = content_file['tags']
   for tag in tags:
     tag_item_pairs_i = (dict((k, v(subpath, tag)) for k, v in pairs_item_tag.items()))
@@ -623,19 +631,25 @@ def complete_base(base_lines_path, tree_src):
 
 def generate_pages(page_base_path, tree_src):
 
-  page_subpath = get_template_subpath(page_base_path)
-  tree_src_lvl = read_by_path(tree_src['content'], page_subpath)
+  page_base_subpath = get_template_subpath(page_base_path)
+  # use page_base_subpath if existing content category else get each mapped subpath
+  page_subpaths = [page_base_subpath] if read_by_path(tree_src['content'], page_base_subpath) else read_by_path(tree_src['content']['_map'], page_base_subpath)
 
-  for page_content_name in tree_src_lvl:
-    if check_file_md(page_content_name):
+  page_base_lines = read_by_path(tree_src, page_base_path)
 
-      page_base_lines = read_by_path(tree_src, page_base_path)
-      page_content_path = get_source_path(page_subpath, page_content_name)
-      page_content = read_by_path(tree_src['content'], page_content_path)
+  for page_subpath in page_subpaths:
 
-      page_lines = populate_lines(page_base_lines, page_content, tree_src)
-      page_path = tree_src_lvl[page_content_name]['url']
-      tree_src = write_by_path(tree_src, get_source_path('static', page_path), page_lines)
+    tree_src_lvl = read_by_path(tree_src['content'], page_subpath)
+
+    for page_content_name in tree_src_lvl:
+      if check_file_md(page_content_name):
+
+        page_content_path = get_source_path(page_subpath, page_content_name)
+        page_content = read_by_path(tree_src['content'], page_content_path)
+
+        page_lines = populate_lines(page_base_lines, page_content, tree_src)
+        page_path = tree_src_lvl[page_content_name]['url']
+        tree_src = write_by_path(tree_src, get_source_path('static', page_path), page_lines)
 
   delete_by_path(tree_src, page_base_path)
   return tree_src
@@ -729,7 +743,8 @@ def generate_list(list_base_path, tree_src, tag = None):
 def generate_lists(list_base_path, tree_src):
 
   list_base_subpath = get_template_subpath(list_base_path)
-  list_subpaths = [list_base_subpath] if list_base_subpath in tree_src['content'] else tree_src['content']['_map'][list_base_subpath]
+  # use list_base_subpath if existing content category else get each mapped subpath
+  list_subpaths = [list_base_subpath] if read_by_path(tree_src['content'], list_base_subpath) else read_by_path(tree_src['content']['_map'], list_base_subpath)
 
   lines = read_by_path(tree_src, list_base_path)
   # if one list template for multiple subpaths, no longer needed
