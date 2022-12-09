@@ -9,15 +9,22 @@ Provisionally named work in progress.
   - [Overview](#overview)
   - [Organisation](#organisation)
     - [Inclusion](#inclusion)
+      - [File inclusion](#file-inclusion)
+      - [Path inclusion](#path-inclusion)
+      - [Content file values](#content-file-values)
     - [Templates](#templates)
+      - [Template reuse](#template-reuse)
+      - [Additional values](#additional-values)
   - [Configuration](#configuration)
   - [Requirements](#requirements)
   - [CLI commands](#cli-commands)
+    - [Development](#development)
+    - [Options](#options)
   - [Notes](#notes)
 
 ## Goal
 
-Generate a website from a set of three source directories, producing complete HTML files from content, base and partial files, including item templates populated with content file values and paginated list templates, and saving to an output directory, with no config files required.
+Generate a website from a set of three source directories, producing complete HTML files from content, base and partial files, including item templates populated with content file values and paginated list templates, and saving to an output directory, with no config files required. Allow for drafts and a beta version, generate content category XML summaries and provide cache busting and live serving.
 
 ## Done
 
@@ -26,6 +33,8 @@ Generate a website from a set of three source directories, producing complete HT
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
 - generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory if no override file present plus one for each content file tag used in the directory in a subdirectory named by default `tags`
 - template reuse via content category mapping for all template types
+- omission of draft content
+- beta version build
 - cache bust suffix insertion for CSS and JS file types
 - static file save to default output directory, for variable output file types and an arbitrarily deep static tree
 - partial live serving - file tree update on change, without page reload
@@ -35,6 +44,7 @@ Generate a website from a set of three source directories, producing complete HT
 - allow use of content file tag value in template file subpath
 - extend use of path tag to other nested files
 - revise remaining commands to equivalent Python method calls
+- generate an XML summary for each content category
 - extend live serving to reload page and revise to diff
 - memoise completed partial filenames
 - refactor and comment
@@ -93,16 +103,21 @@ key_2: value_2
 body
 ```
 
+###### Required pairs
+
+- `date` - for use in content file sorting
+
 ###### Expected formats
 
 - `date` - `YYYY-MM-DD`
 - `tags` - `[ "tag 1", ... ]`
+- `draft` - `true` / `false` / ..., where `true` indicates that the content file is not to be used in generating output
 
 ###### Other special cases
 
-- **Images**: Any content file key containing the word `image` is assumed to refer to an image file in either assets/ or images/.
+- `image` - whether the entire key or part of it, any path provided as the corresponding value is assumed to relate to an image file in either assets/ or images/
 
-###### Additional values
+###### Alternative values
 
 In addition to values provided in the meta section of the content file, the following are available for use:
 
@@ -122,13 +137,15 @@ Specifically:
 - any HTML file in partials/ with a name of the form type.item.description.html is a template to be populated with values from the content subdirectory of that type, if the type is present, e.g. blog.news.item.li.html from files in content/blog/news/, before being inserted one or more times, e.g. to provide a list in which each `li` element summarises one content item; if no type is present in the name, this is provided in the item inclusion syntax by prefixing the name with the type followed by a colon (':'), e.g. `<== type:item.description.html`; in a `.page` template the final element of the content subpath may be `tag0` to indicate any content file tagged with the first tag (i.e. the tag at index 0) in the list of tags for the current content file
 - any HTML file in static/ with a name of the form type.list.html is a template to be completed with the content of one `.item` file in partials/, each `.item` generated once per file in the content subdirectory of that type, e.g. blog.news.list.html relates to files in content/blog/news/; one output file is to be generated per page of the paginated list, each currently named `page-` plus the page number, e.g. content/blog/news/page-1.html for the first; the main list for a content subdirectory is not generated where an override file - a file named for that content directory - is present in static/, e.g. a list for content/blog/ is not created if blog.html is present; one additional list is generated for each tag used in the content subdirectory, these stored in a further subdirectory named by default `tags`, each in its own `<tag name>/` subdirectory
 
-#### Template reuse
+##### Template reuse
 
 Each content type may be mapped to one or more group identifiers by naming the content subdirectory not `type` but `identifier_1[:indentifier_n]:type`, e.g. content/feed:blog. Each such identifier can then be used in place of the type in a `.list`, `.page` and/or `.item` template name in order that the given template is used once for each of the mapped types, e.g. feed.list.html for content files in content/feed:blog.
 
 ##### Additional values
 
-In addition to values provided in the meta section of the content file (see [Content file values](#content-file-values) above), the following are available for use in `.item` templates:
+###### .item
+
+In addition to values provided in the meta section of the content file and available alternatives (see [Content file values](#content-file-values) above), the following are available for use in `.item` templates:
 
 - `image` - the URL of the first image on its own line in the body of the content file
 - `intro` - the first non-heading, non-image line of the body of the content file, converted from Markdown to HTML, with any `a` element `href` value removed
@@ -146,6 +163,8 @@ The following items are available for use in `.item` templates inserted with the
 
 - `tag-url` - the URL of the list page generated for the given tag
 - `tag-name` - the tag name
+
+###### .list
 
 The following values are available for use in `.list` templates for the purpose of populating control elements:
 
