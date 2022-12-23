@@ -1,5 +1,24 @@
 #!/usr/bin/python3
 
+# Organization:
+#
+# - global dependencies
+#
+# - settings
+#
+#   - default values
+#   - CLI option handling
+#   - key-value pair handlers
+#
+# - activity
+#
+#   - utility functions (incl. prime_workflow)
+#   - processors
+#   - workflows (incl. generate_site)
+#
+# - initialization
+
+
 # include global dependencies
 
 # - standard library
@@ -866,9 +885,9 @@ finalise_content = prime_workflow(
 )
 
 
-# define key tasks
-
 # workflow: generate_site
+
+# define key tasks
 
 def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
 
@@ -1012,7 +1031,7 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
   return False
 
 
-# init
+# initialization
 
 generate_site()
 
