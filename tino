@@ -29,6 +29,7 @@ from re import escape, search, sub
 from functools import reduce
 from operator import itemgetter
 from datetime import datetime
+from email import utils
 from copy import deepcopy
 #   - for server option
 from subprocess import Popen, signal
@@ -43,12 +44,18 @@ from css_html_js_minify import process_single_css_file #, process_single_js_file
 # set default values
 
 # - build
+generator = 'tino: https://github.com/babblevoice/tino'
+
+datetime_now        = datetime.now()
+datetime_now_rfc822 = utils.format_datetime(datetime_now)
+datetime_now_digits = datetime_now.strftime("%H%M%S%d%m%y") # _hhmmssddmmyy
+
 tag_flow = '<==' # inserts a partial or a content file value, e.g. '<== partial.html [n]' or '<== key'
 tag_path = '==>' # provides the URL parts required to reach the root directory, e.g. '==>path/to/file'
 
 output_dir_root_name    = 'public'
 output_dir_tags_name    = 'tags'
-output_file_suffix_bust = '_' + datetime.now().strftime("%H%M%S%d%m%y") # _hhmmssddmmyy
+output_file_suffix_bust = '_' + datetime_now_digits
 output_attr_prefix      = 'data-'
 
 tino_meta_tag_name     = 'tino-meta'
