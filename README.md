@@ -16,6 +16,8 @@ Provisionally named work in progress.
       - [Template reuse](#template-reuse)
       - [Additional values](#additional-values)
   - [Configuration](#configuration)
+    - [Project meta data provision](#project-meta-data-provision)
+    - [Default values](#default-values)
   - [Requirements](#requirements)
   - [CLI commands](#cli-commands)
     - [Development](#development)
@@ -33,6 +35,7 @@ Generate a website from a set of three source directories, producing complete HT
   - content file values into `.page` and `.item` templates using the `<== key` syntax, with Markdown to HTML conversion, currently ordering items by date descending only
 - generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory if no override file present plus one for each content file tag used in the directory in a subdirectory named by default `tags`
 - template reuse via content category mapping for all template types
+- provision of project meta data via the base index.html file
 - omission of draft content
 - beta version build
 - cache bust suffix insertion for CSS and JS file types
@@ -121,7 +124,9 @@ body
 
 In addition to values provided in the meta section of the content file, the following are available for use:
 
-- `date-expanded-uk` - if the `date` content value is present, that date in expanded UK format, e.g. `1970-01-01` as `1 January 1970`
+- if the `date` content value is present:
+  - `date-expanded-uk` - that date in expanded UK format, e.g. `1970-01-01` as `1 January 1970`
+  - `datetime-rfc822` - that date in RFC 822 datetime format, e.g. `1970-01-01` as `Thu, 01 Jan 1970 00:00:00 -0000`
 
 #### Templates
 
@@ -184,14 +189,39 @@ The following values are available for use in `.list` templates for the purpose 
 
 ### Configuration
 
+#### Project meta data provision
+
+Project meta data can be provided as key-value pairs in tino meta tags in the base index.html file. Each is included on its own line, presumably but not necessarily in the head element.
+
+For example, for the pair `key` and `value`, with use of the default syntax:
+
+```html
+<head>
+  ...
+  <tino-meta name="key" content="value">
+  ...
+</head>
+```
+
+Each line with a tino meta tag is omitted from the output file.
+
+#### Default values
+
 The following default values are set close to the top of the main file:
 
 - flow tag - `<==`
 - path tag - `==>`
+
 - output root directory name - `public`
 - output tags directory name - `tags`
 - output file cache bust suffix - `_hhmmssddmmyy`, where `h`, `m`, `s`, `d`, `m` and `y` are the relevant digits for the current time (hour, minute and second) and date (day, month, year)
 - output attribute prefix - `data-`
+
+- tino meta tag name - `tino-meta`
+- tino meta tag key attribute - `name`
+- tino meta tag value attribute - `content`
+
+- server port - `8000`
 - server loop (seconds) - `3`
 
 ### Requirements
