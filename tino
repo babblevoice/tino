@@ -945,8 +945,9 @@ def prepare_content(tree_src, root = 'content'):
     # handle content file
     if check_file_md(item_name):
       tree_src = format_content(item_path, tree_src)
-    if 'tags' in tree_src_lvl[item_name]:
-      tag_set.update(tree_src_lvl[item_name]['tags'])
+      content_file = read_by_path(tree_src, item_path)
+      if content_file is not None and 'tags' in content_file: # account for draft content file omission
+        tag_set.update(content_file['tags'])
 
   tree_src = write_by_path(tree_src, root + '/_tag_set', list(tag_set))
   return tree_src
@@ -974,7 +975,7 @@ def pull_meta_pairs(line):
 def parse_tino_tags(tree_src):
   index_lines = tree_src['static']['index.html']
   index_lines_filtered = list(filter(pull_meta_pairs, index_lines))
-  tree_src['content']['index.html'] = index_lines_filtered
+  tree_src['static']['index.html'] = index_lines_filtered
   return tree_src
 
 def include_content(tree_src, root = '.'):
