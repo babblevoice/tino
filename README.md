@@ -36,6 +36,7 @@ Generate a website from a set of three source directories, producing complete HT
 - generation of paginated content lists based on `.list` templates, incl. population with pagination values - one main list per content directory if no override file present plus one for each content file tag used in the directory in a subdirectory named by default `tags`
 - template reuse via content category mapping for all template types
 - provision of project meta data via the base index.html file
+- generation of one RSS XML file per content subdirectory
 - omission of draft content
 - beta version build
 - cache bust suffix insertion for CSS and JS file types
@@ -44,13 +45,14 @@ Generate a website from a set of three source directories, producing complete HT
 
 ## Todo
 
+- allow for content category description line in RSS XML files
+- extend live serving to reload page and revise to diff
 - allow use of content file tag value in template file subpath
 - extend use of path tag to other nested files
 - revise remaining commands to equivalent Python method calls
-- generate an XML summary for each content category
-- extend live serving to reload page and revise to diff
 - memoise completed partial filenames
-- refactor and comment
+- refactor, add docstrings with interactive examples and comment
+- improve this readme
 
 ## Code
 
@@ -109,6 +111,11 @@ body
 ###### Required pairs
 
 - `date` - for use in content file sorting
+
+###### Optional pairs
+
+- `title` - for use in RSS index.xml
+- `description` - for use in RSS index.xml
 
 ###### Expected formats
 
