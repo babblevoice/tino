@@ -384,13 +384,19 @@ def format_content(content_path, tree_src):
   if 'draft' in pairs and 'true' == pairs['draft']:
     delete_by_path(tree_src, content_path)
     return tree_src
+  if 'date' in pairs and pairs['date']:
+    datetime_content = datetime.strptime(pairs['date'], "%Y-%m-%d")
+    # omit content if future-dated
+    if datetime_content > datetime_now:
+      delete_by_path(tree_src, content_path)
+      return tree_src
+    # handle alternate date format
+    date_expanded_uk = datetime_content.strftime("%d %B %Y")
+    pairs['date-expanded-uk'] = date_expanded_uk if '0' != date_expanded_uk[0] else date_expanded_uk[1:]
+    pairs['datetime-rfc822']  = utils.formatdate(datetime_content.timestamp())
   # set further specifics
   pairs['body'] = list(map(lambda line: line + '\n', markdown(''.join(lines_body), extensions=['tables', 'fenced_code', 'attr_list']).split('\n'))) # 'tables' for tables using - and |, 'fenced_code' for code blocks using ```, 'attr_list' for links using #-prefixed heading
   pairs['url']  = get_page_path(content_path)
-  if 'date' in pairs and pairs['date']:
-    date_expanded_uk = datetime.strptime(pairs['date'], "%Y-%m-%d").strftime("%d %B %Y")
-    pairs['date-expanded-uk'] = date_expanded_uk if '0' != date_expanded_uk[0] else date_expanded_uk[1:]
-    pairs['datetime-rfc822']  = utils.formatdate(datetime.strptime(pairs['date'], "%Y-%m-%d").timestamp())
   # store content on tree
   tree_src = write_by_path(tree_src, content_path, pairs)
   return tree_src
