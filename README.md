@@ -37,7 +37,7 @@ Generate a website from a set of three source directories, producing complete HT
 - template reuse via content category mapping for all template types
 - provision of project meta data via the base index.html file
 - generation of one RSS XML file per content subdirectory
-- omission of draft content
+- omission of draft and future-dated content
 - beta version build
 - cache bust suffix insertion for CSS and JS file types
 - static file save to default output directory, for variable output file types and an arbitrarily deep static tree
@@ -119,7 +119,7 @@ body
 
 ###### Expected formats
 
-- `date` - `YYYY-MM-DD`
+- `date` - `YYYY-MM-DD`, where a date ahead of the current datetime indicates that the content file is not to be used in generating output
 - `tags` - `[ "tag 1", ... ]`
 - `draft` - `true` / `false` / ..., where `true` indicates that the content file is not to be used in generating output
 
