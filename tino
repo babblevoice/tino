@@ -77,8 +77,10 @@ if '--help' in argv:
   print(shell_text_help)
   exit()
 
-exclude_content = True if '--exclude-content' in argv else False
-is_beta         = True if '--beta' in argv else False
+exclude_content        = True if '--exclude-content' in argv else False
+include_content_draft  = True if '--include-content-draft' in argv else False
+include_content_future = True if '--include-content-future' in argv else False
+is_beta                = True if '--beta' in argv else False
 
 server_port             = str(server_port)        if '--port' not in argv else argv[argv.index('--port') + 1]
 output_file_suffix_bust = output_file_suffix_bust if '--bust' not in argv else argv[argv.index('--bust') + 1]
@@ -381,13 +383,13 @@ def format_content(content_path, tree_src):
   cache_out = reduce(extract_content, content_file, cache_in)
   lines_body, pairs = itemgetter('lines_body', 'pairs')(cache_out)
   # omit content if draft
-  if 'draft' in pairs and 'true' == pairs['draft']:
+  if not include_content_draft and 'draft' in pairs and 'true' == pairs['draft']:
     delete_by_path(tree_src, content_path)
     return tree_src
   if 'date' in pairs and pairs['date']:
     datetime_content = datetime.strptime(pairs['date'], "%Y-%m-%d")
     # omit content if future-dated
-    if datetime_content > datetime_now:
+    if not include_content_future and datetime_content > datetime_now:
       delete_by_path(tree_src, content_path)
       return tree_src
     # handle alternate date format
