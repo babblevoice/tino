@@ -37,7 +37,7 @@ Generate a website from a set of three source directories, producing complete HT
 - template reuse via content category mapping for all template types
 - provision of project meta data via the base index.html file
 - generation of one RSS XML file per content subdirectory
-- omission of draft and future-dated content
+- omission of draft and future-dated content, unless overridden via CLI option
 - beta version build
 - cache bust suffix insertion for CSS and JS file types
 - static file save to default output directory, for variable output file types and an arbitrarily deep static tree
@@ -122,6 +122,8 @@ body
 - `date` - `YYYY-MM-DD`, where a date ahead of the current datetime indicates that the content file is not to be used in generating output
 - `tags` - `[ "tag 1", ... ]`
 - `draft` - `true` / `false` / ..., where `true` indicates that the content file is not to be used in generating output
+
+Non-generation of output for future-dated and draft content may be overridden - see [Options](#options) below.
 
 ###### Other special cases
 
@@ -258,6 +260,8 @@ A development live server listening by default at `localhost:8000` can be run wi
 - `--beta` - build a beta version, making the output directory beta/public/ and including in URLs the `beta` leading path part
 - `--bust <suffix>` - cache bust instead with `<suffix>`
 - `--exclude-content` - do not load content files, passing any templates unpopulated to the output directory
+- `--include-content-draft` - if content files are loaded, generate output also for those with a value for `draft` of `true`
+- `--include-content-future` - if content files are loaded, generate output also for those with a value for `date` ahead of the current datetime
 - `--help` - print help text
 - `--port <n>` - listen instead on port `<n>`
 
