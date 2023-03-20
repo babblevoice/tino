@@ -253,17 +253,18 @@ If python3 is located elsewhere, simply modify the path in the hashbang at the t
 
 #### Development
 
-A development live server listening by default at `localhost:8000` can be run with the command `python3 path/to/tino server`, `path/to/tino server` or `tino server`, per the above on file location.
+A development live server listening by default at `localhost:8000` can be run with the command `python3 path/to/tino --live`, `path/to/tino --live` or `tino --live`, optionally using the shorter `-l` flag, per the above on file location.
 
 #### Options
 
-- `--beta` - build a beta version, making the output directory beta/public/ and including in URLs the `beta` leading path part
-- `--bust <suffix>` - cache bust instead with `<suffix>`
-- `--exclude-content` - do not load content files, passing any templates unpopulated to the output directory
-- `--include-content-draft` - if content files are loaded, generate output also for those with a value for `draft` of `true`
-- `--include-content-future` - if content files are loaded, generate output also for those with a value for `date` ahead of the current datetime
-- `--help` - print help text
-- `--port <n>` - listen instead on port `<n>`
+- `-h`, `--help` - show the help text and exit
+- `-l`, `--live` - run the development server
+- `-p`, `--port <n>` - listen instead on port `<n>`
+- `-b`, `--bust <suffix>` - cache bust instead with `<suffix>`
+- `-B`, `--beta` - build a beta version, making the output directory beta/public/ and including in URLs the `beta` leading path part
+- `-F`, `--incl-future` - if content files are loaded, generate output also for those with a value for `date` ahead of the current datetime
+- `-D`, `--incl-draft` - if content files are loaded, generate output also for those with a value for `draft` of `true`
+- `-E`, `--excl` - do not load content files, passing any templates unpopulated to the output directory
 
 ### Notes
 
