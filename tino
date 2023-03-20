@@ -22,16 +22,17 @@
 # include global dependencies
 
 # - standard library
-from sys import argv, exit
+from datetime import datetime
+from argparse import ArgumentParser, RawDescriptionHelpFormatter
+from operator import itemgetter
 from os import devnull, system, listdir, mkdir, path, sep, kill
 from contextlib import redirect_stdout
 from re import escape, search, sub
 from functools import reduce
-from operator import itemgetter
-from datetime import datetime
 from email import utils
 from copy import deepcopy
 #   - for server option
+from sys import exit
 from subprocess import Popen, signal
 from time import sleep, time
 from traceback import print_exc
@@ -67,23 +68,42 @@ tino_meta_pairs = {}
 server_port      = 8000
 server_loop_secs = 3
 
-# - print
-shell_text_help = 'Usage: tino [ --beta | --bust <suffix> | --exclude-content | --port <n> | server / --help ]'
-
 
 # handle CLI options
 
-if '--help' in argv:
-  print(shell_text_help)
-  exit()
+# - get parser
+parser = ArgumentParser(
+  description=f'Generates a static site from the content/, partial/ and static/ subdirectories,\n'
+              f'outputting by default to the {output_dir_root_name}/ subdirectory',
+  formatter_class=RawDescriptionHelpFormatter
+)
 
-exclude_content        = True if '--exclude-content' in argv else False
-include_content_draft  = True if '--include-content-draft' in argv else False
-include_content_future = True if '--include-content-future' in argv else False
-is_beta                = True if '--beta' in argv else False
+# - set options
+parser.add_argument('-l', '--live', default=False, action='store_true', help='run the development server')
+parser.add_argument(
+  '-p', '--port', metavar='NUM', default=str(server_port), type=str,
+  help=f'set the server port number to NUM (default: {server_port})'
+)
+parser.add_argument(
+  '-b', '--bust', metavar='SUF', default=output_file_suffix_bust, type=str,
+  help=f'set the cachebuster suffix to SUF (current: {output_file_suffix_bust})'
+)
+parser.add_argument(
+  '-B', '--beta', default=False, action='store_true',
+  help=f'output by default to the beta/{output_dir_root_name}/ subdirectory'
+)
+parser.add_argument('-F', '--incl-future', default=False, action='store_true', help='include future content')
+parser.add_argument('-D', '--incl-draft',  default=False, action='store_true', help='include draft content')
+parser.add_argument('-E', '--excl',        default=False, action='store_true', help='exclude all content')
 
-server_port             = str(server_port)        if '--port' not in argv else argv[argv.index('--port') + 1]
-output_file_suffix_bust = output_file_suffix_bust if '--bust' not in argv else argv[argv.index('--bust') + 1]
+args_parsed = parser.parse_args()
+
+# - destructure
+is_live, server_port, output_file_suffix_bust, is_beta, include_content_future, include_content_draft, exclude_content = itemgetter(
+  'live', 'port', 'bust', 'beta', 'incl_future', 'incl_draft', 'excl'
+)(vars(args_parsed))
+
+#print(exclude_content, include_content_draft, include_content_future, is_beta, is_live, server_port, output_file_suffix_bust)
 
 
 # define additional available key-value pair handlers
@@ -1127,7 +1147,7 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
 
 generate_site()
 
-if not 'server' in argv:
+if not is_live:
   exit()
 
 print(f'View site at localhost:{server_port} | Press Ctrl+C here to stop')
