@@ -44,6 +44,8 @@ from css_html_js_minify import process_single_css_file #, process_single_js_file
 
 # set default values
 
+tino_file_live_name = '._tino_live'
+
 # - build
 generator = 'tino: https://github.com/babblevoice/tino'
 
@@ -66,7 +68,16 @@ tino_meta_pairs = {}
 
 # - serve
 server_port      = 8000
-server_loop_secs = 3
+server_loop_secs = 1
+server_live_html = '<script>'\
+                   '  setInterval(() => {'\
+                   '    fetch("/' + tino_file_live_name + '")'\
+                   '      .then(res => res.text())'\
+                   '      .then(txt => {'\
+                   '        if(txt.includes("update")) window.location.reload()'\
+                   '      })'\
+                   '  }, ' + str(server_loop_secs * 1000) + ')'\
+                   '</script>'
 
 
 # handle CLI options
@@ -102,8 +113,6 @@ args_parsed = parser.parse_args()
 is_live, server_port, output_file_suffix_bust, is_beta, include_content_future, include_content_draft, exclude_content = itemgetter(
   'live', 'port', 'bust', 'beta', 'incl_future', 'incl_draft', 'excl'
 )(vars(args_parsed))
-
-#print(exclude_content, include_content_draft, include_content_future, is_beta, is_live, server_port, output_file_suffix_bust)
 
 
 # define additional available key-value pair handlers
@@ -906,6 +915,20 @@ def add_bust_url_part(lines):
 
   return lines_updated
 
+def add_live_serve_js(lines):
+
+  if not is_live: return lines
+
+  lines_updated = []
+
+  for line in lines:
+    tag_i = line.find('</body>')
+    if -1 != tag_i:
+      line = line[:tag_i] + tag_i * ' ' + server_live_html + '\n' + tag_i * ' ' + line[tag_i:]
+    lines_updated.append(line)
+
+  return lines_updated
+
 def remove_path_tags(lines):
   return list(map(lambda line: line.replace(tag_path, ''), lines))
 
@@ -916,6 +939,7 @@ finalise_content = prime_workflow(
   # accepts and returns lines list
   add_beta_url_part,
   add_bust_url_part,
+  add_live_serve_js,
   remove_path_tags,
   join_lines
 )
@@ -1158,9 +1182,15 @@ try:
   while True:
     sleep(server_loop_secs)
     time_secs_current = int(str(time()).split('.')[0])
-    if check_source_updated(time_secs_current):
+    is_updated = check_source_updated(time_secs_current)
+    if is_updated:
       print(f'Source modified - updating {output_dir_root_name}/')
       generate_site()
+    try:
+      with open(f'./{output_dir_root_name}/{tino_file_live_name}', 'w') as f:
+        f.write('update' if is_updated else '')
+    except:
+      pass
 except KeyboardInterrupt:
   exit()
 except Exception:
