@@ -62,6 +62,9 @@ output_dir_tags_name    = 'tags'
 output_file_suffix_bust = '_' + datetime_now_digits
 output_attr_prefix      = 'data-'
 
+shared_media_dir_name_content = 'images'
+shared_media_dir_name_static  = 'assets'
+
 tino_meta_tag_name     = 'tino-meta'
 tino_meta_tag_attr_key = 'name'
 tino_meta_tag_attr_val = 'content'
@@ -859,16 +862,26 @@ def generate_lists(list_base_path, tree_src):
   return tree_src
 
 def init_output_dir():
+  # handle root directory, incl. for beta
   output_dir_root_name_local = output_dir_root_name
   if is_beta:
     output_dir_root_name_local = output_dir_root_name + sep + 'beta'
   ensure_out_dir()
-  if path.exists('static/assets'):
-    ensure_out_dir('assets')
-    copytree('static/assets', f'{output_dir_root_name_local}/assets', dirs_exist_ok = True)
-  if not exclude_content and path.exists('content/images'):
-    ensure_out_dir('images')
-    copytree('content/images', f'{output_dir_root_name_local}/images', dirs_exist_ok = True)
+  # handle any shared media subdirectories
+  if path.exists(f'static/{shared_media_dir_name_static}'):
+    ensure_out_dir(shared_media_dir_name_static)
+    copytree(
+      f'static/{shared_media_dir_name_static}',
+      f'{output_dir_root_name_local}/{shared_media_dir_name_static}',
+      dirs_exist_ok = True
+    )
+  if not exclude_content and path.exists(f'content/{shared_media_dir_name_content}'):
+    ensure_out_dir(shared_media_dir_name_content)
+    copytree(
+      f'content/{shared_media_dir_name_content}',
+      f'{output_dir_root_name_local}/{shared_media_dir_name_content}',
+      dirs_exist_ok = True
+    )
 
 
 # workflow: finalise_content
@@ -958,7 +971,7 @@ def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
 
     # handle items skipped
     if 'content' == item_name and exclude_content: continue
-    if item_name in ['assets', 'images']: continue
+    if item_name in [shared_media_dir_name_static, shared_media_dir_name_content]: continue
     if '.' == item_name[0]: continue
 
     item_path = get_source_path(root, item_name)
@@ -1153,7 +1166,7 @@ generate_site = prime_workflow(
 def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
   for item_name in dirs:
     if 'content' == item_name and exclude_content: continue
-    if item_name in ['assets', 'images']: continue
+    if item_name in [shared_media_dir_name_static, shared_media_dir_name_content]: continue
     if '.' == item_name[0]: continue
     item_path = get_source_path(root, item_name)
     if not path.exists(item_path):
