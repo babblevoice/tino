@@ -25,8 +25,9 @@
 from datetime import datetime
 from argparse import ArgumentParser, RawDescriptionHelpFormatter
 from operator import itemgetter
-from os import devnull, system, listdir, mkdir, path, sep, kill
+from os import devnull, listdir, mkdir, path, sep, kill
 from contextlib import redirect_stdout
+from shutil import copytree
 from re import escape, search, sub
 from functools import reduce
 from email import utils
@@ -864,10 +865,10 @@ def init_output_dir():
   ensure_out_dir()
   if path.exists('static/assets'):
     ensure_out_dir('assets')
-    system(f'cp -r static/assets/* {output_dir_root_name_local}/assets/')
+    copytree('static/assets', f'{output_dir_root_name_local}/assets', dirs_exist_ok = True)
   if not exclude_content and path.exists('content/images'):
     ensure_out_dir('images')
-    system(f'cp -r content/images/* {output_dir_root_name_local}/images/') #ln -s content/images/* {output_dir_root_name}/images/')
+    copytree('content/images', f'{output_dir_root_name_local}/images', dirs_exist_ok = True)
 
 
 # workflow: finalise_content
