@@ -4,19 +4,26 @@
 #
 # - global dependencies
 #
-# - settings
-#
+# - SETTINGS
 #   - default values
 #   - CLI option handling
 #   - key-value pair handlers
 #
-# - activity
-#
+# - ACTIVITY
 #   - utility functions (incl. prime_workflow)
 #   - processors
-#   - workflows (incl. generate_site)
+#   - WORKFLOWS
+#     - ...
+#     - generate_site
+#       - get_source_tree (tree_src -> {'content':{'_map':{},'<category>':{'<file>':'...', ...}, ...},'partials':{...},'static':{...}})
+#       - prepare_content (tree_src -> {'content':{..., '_tag_set':[...],'<category>':{'<file>':{...}, ...}, ...}, ...})
+#       - insert_partials (tree_src -> {..., 'static':{...}})
+#       - parse_tino_tags (tree_src -> {..., 'static':{'index.html':'...', ...}})
+#       - include_content (tree_src -> {..., 'static':{'<category>':{'tags':{...}, ...}, ...}})
+#       - collate_rss_xml (tree_src -> {..., 'static':{'<category>':{'index.xml':'...', ...}, ...}})
+#       - output_static
 #
-# - initialization
+# - INITIATION (build, poss. serve)
 
 
 # include global dependencies
@@ -42,6 +49,8 @@ from traceback import print_exc
 from markdown import markdown
 from css_html_js_minify import process_single_css_file #, process_single_js_file
 
+
+# SETTINGS
 
 # set default values
 
@@ -83,7 +92,6 @@ server_live_html = '<script>'\
                    '  }, ' + str(server_loop_secs * 1000) + ')'\
                    '</script>'
 
-
 # handle CLI options
 
 # - get parser
@@ -118,7 +126,6 @@ is_live, server_port, output_file_suffix_bust, is_beta, include_content_future, 
   'live', 'port', 'bust', 'beta', 'incl_future', 'incl_draft', 'excl'
 )(vars(args_parsed))
 
-
 # define additional available key-value pair handlers
 
 # - in base files using .item templates
@@ -152,6 +159,8 @@ pairs_item_tag = {
   'tag-name': lambda subpath, tag: tag
 }
 
+
+# ACTIVITY
 
 # define utilities
 
@@ -509,6 +518,8 @@ def generate_items(base_lines, content_files, number = None, offset = 0):
     lines.extend(populate_lines(base_lines, content_file[1]))
   return lines
 
+
+# WORKFLOWS
 
 # workflow: complete_base_line
 
@@ -1181,7 +1192,7 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
   return False
 
 
-# initialization
+# INITIATION
 
 generate_site()
 
