@@ -21,7 +21,7 @@
 #       - parse_tino_tags (tree_src -> {..., 'static':{'index.html':'...', ...}})
 #       - include_content (tree_src -> {..., 'static':{'<category>':{'tags':{...}, ...}, ...}})
 #       - collate_rss_xml (tree_src -> {..., 'static':{'<category>':{'index.xml':'...', ...}, ...}})
-#       - output_static
+#       - output_complete
 #
 # - INITIATION (build, poss. serve)
 
@@ -39,6 +39,7 @@ from re import escape, search, sub
 from functools import reduce
 from email import utils
 from copy import deepcopy
+from json import dump
 #   - for server option
 from sys import exit
 from subprocess import Popen, signal
@@ -54,6 +55,7 @@ from css_html_js_minify import process_single_css_file #, process_single_js_file
 
 # set default values
 
+tino_file_tree_name = '._tino_tree'
 tino_file_live_name = '._tino_live'
 
 # - build
@@ -1152,17 +1154,22 @@ def collate_rss_xml(tree_src, root = 'content'):
 
   return tree_src
 
-def output_static(tree_src, root = 'static'):
+def output_complete(tree_src, root = 'static'):
   if 'static' == root: init_output_dir()
   tree_src_lvl = read_by_path(tree_src, root)
   for item_name in tree_src_lvl:
     item_path = sep.join([*root.split(sep)[1:], item_name])
     if dict == type(tree_src_lvl[item_name]) and not check_file_md(item_name):
       ensure_out_dir(item_path)
-      output_static(tree_src, get_source_path(root, item_name)) # recurse
+      output_complete(tree_src, get_source_path(root, item_name)) # recurse
       continue
     content = finalise_content(tree_src_lvl[item_name])
     output_lines(item_path, content)
+  return tree_src
+
+def persist_as_json(tree_src):
+  with open(tino_file_tree_name, 'w') as f:
+    dump(tree_src, f , ensure_ascii=False)
 
 generate_site = prime_workflow(
   get_source_tree,
@@ -1171,7 +1178,8 @@ generate_site = prime_workflow(
   parse_tino_tags,
   include_content,
   collate_rss_xml,
-  output_static
+  output_complete,
+  persist_as_json
 )
 
 def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
