@@ -26,7 +26,7 @@ Provisionally named work in progress.
 
 ## Goal
 
-Generate a website from a set of three source directories, producing complete HTML files from content, base and partial files, including item templates populated with content file values and paginated list templates, and saving to an output directory, with no config files required. Allow for drafts and a beta version, generate content category XML summaries and provide cache busting and live serving.
+Generate via CLI a website from a set of three source directories, producing complete HTML files from content, base and partial files, including item templates to be populated with content file values and paginated list templates, and saving to an output directory, with no config files required. Allow for drafts and a beta version, generate content category XML summaries and provide cache busting and live serving.
 
 ## Done
 
@@ -41,16 +41,19 @@ Generate a website from a set of three source directories, producing complete HT
 - beta version build
 - cache bust suffix insertion for CSS and JS file types
 - static file save to default output directory, for variable output file types and an arbitrarily deep static tree
-- partial live serving - file tree update on change, without page reload
+- persistence of site representation as JSON
+- live serving - file tree update on change, with page reload
+- help text
 
 ## Todo
 
+- revise site generation for subset processing via diff with persisted JSON
+- revise live serving update check for use of absolute time
+- memoise completed partial filenames
 - allow for content category description line in RSS XML files
-- extend live serving to reload page and revise to diff
 - allow use of content file tag value in template file subpath
 - extend use of path tag to other nested files
-- revise remaining commands to equivalent Python method calls
-- memoise completed partial filenames
+- replace use of subprocess for server and revise live server file to endpoint
 - refactor, add docstrings with interactive examples and comment
 - improve this readme
 
@@ -216,7 +219,7 @@ Each line with a tino meta tag is omitted from the output file.
 
 #### Default values
 
-The following default values are set close to the top of the main file:
+The following default values are among those set close to the top of the main file:
 
 - flow tag - `<==`
 - path tag - `==>`
@@ -226,12 +229,15 @@ The following default values are set close to the top of the main file:
 - output file cache bust suffix - `_hhmmssddmmyy`, where `h`, `m`, `s`, `d`, `m` and `y` are the relevant digits for the current time (hour, minute and second) and date (day, month, year)
 - output attribute prefix - `data-`
 
+- content shared media directory name - `images`
+- static shared media directory name - `assets`
+
 - tino meta tag name - `tino-meta`
 - tino meta tag key attribute - `name`
 - tino meta tag value attribute - `content`
 
 - server port - `8000`
-- server loop (seconds) - `3`
+- server loop (seconds) - `1`
 
 ### Requirements
 
