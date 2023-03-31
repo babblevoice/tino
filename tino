@@ -1,8 +1,8 @@
 #!/usr/bin/python3
 
-# Organization:
-#
 # - global dependencies
+#   - standard library
+#   - external libraries
 #
 # - SETTINGS
 #   - default values
@@ -15,15 +15,16 @@
 #   - WORKFLOWS
 #     - ...
 #     - generate_site
-#       - get_source_tree (tree_src -> {'content':{'_map':{},'<category>':{'<file>':'...', ...}, ...},'partials':{...},'static':{...}})
-#       - prepare_content (tree_src -> {'content':{..., '_tag_set':[...],'<category>':{'<file>':{...}, ...}, ...}, ...})
-#       - insert_partials (tree_src -> {..., 'static':{...}})
-#       - parse_tino_tags (tree_src -> {..., 'static':{'index.html':'...', ...}})
-#       - include_content (tree_src -> {..., 'static':{'<category>':{'tags':{...}, ...}, ...}})
-#       - collate_rss_xml (tree_src -> {..., 'static':{'<category>':{'index.xml':'...', ...}, ...}})
+#       - get_source_tree (tree_src = {'content':{'_map':{},'<category>':{'<file>':'...', ...}, ...},'partials':{...},'static':{...}})
+#       - parse_tino_tags (        -> {..., 'static':{'index.html':'...', ...}})
+#       - prepare_content (        -> {'content':{..., '_tag_set':[...],'<category>':{'<file>':{...}, ...}, ...}, ...})
+#       - insert_partials (        -> {..., 'static':{...}})
+#       - include_content (        -> {..., 'static':{'<category>':{'tags':{...}, ...}, ...}})
+#       - collate_rss_xml (        -> {..., 'static':{'<category>':{'index.xml':'...', ...}, ...}})
 #       - output_complete
-#
-# - INITIATION (build, poss. serve)
+#   - initiation
+#     - BUILD
+#     - poss. SERVE
 
 
 # include global dependencies
@@ -157,7 +158,7 @@ pairs_list = {
 
 # - in .item templates inserted with 'tags'
 pairs_item_tag = {
-  'tag-url':  lambda subpath, tag: f'{sep}{sep.join([subpath, output_dir_tags_name, url_part_prepare(tag), ""])}',
+  'tag-url':  lambda subpath, tag: f'{sep}{sep.join([subpath, output_dir_tags_name, get_as_url_part(tag), ""])}',
   'tag-name': lambda subpath, tag: tag
 }
 
@@ -259,10 +260,7 @@ def index_next_if_any(line, substr):
 def get_data_attr(stem, value):
   return f'{output_attr_prefix}{stem}="{value}"'
 
-def get_with_indent(line, size):
-  return line if '' == line.strip() else ' ' * size + line
-
-def url_part_prepare(string):
+def get_as_url_part(string):
   return sub(r'[^a-zA-Z0-9]', '-', string.lower())
 
 def get_depth_part(subpath):
@@ -270,6 +268,12 @@ def get_depth_part(subpath):
 
 def get_for_output(line, subpath):
   return line.replace(tag_path, tag_path + get_depth_part(subpath))
+
+def get_with_indent(line, size):
+  return line if '' == line.strip() else ' ' * size + line
+
+def get_line_xml(tag_name, content, indent = 0):
+  return get_with_indent(f'<{tag_name}>{content}</{tag_name}>', indent)
 
 def get_with_bust(path_bare, basename, ext):
   return sep.join([path_bare, f'{basename}{output_file_suffix_bust}.{ext}'])
@@ -335,6 +339,17 @@ def prime_workflow(*functions):
 
 
 # define processors
+
+# - meta pair extraction
+
+def pull_meta_pairs(line):
+  tino_meta_tag_name_i = line.find(tino_meta_tag_name)
+  if -1 == tino_meta_tag_name_i: return True
+  line_remainder = line[tino_meta_tag_name_i + len(tino_meta_tag_name):]
+  key = search(escape(tino_meta_tag_attr_key) + r'="(.*?)"', line_remainder).groups()[0]
+  val = search(escape(tino_meta_tag_attr_val) + r'="(.*?)"', line_remainder).groups()[0]
+  tino_meta_pairs[key] = val
+  return False
 
 # - content preparation
 
@@ -519,6 +534,57 @@ def generate_items(base_lines, content_files, number = None, offset = 0):
   for content_file in content_files_batch:
     lines.extend(populate_lines(base_lines, content_file[1]))
   return lines
+
+# - RSS XML generation
+
+def generate_rss_xml(item_path, tree_src):
+
+  subpath = sep.join(item_path.split(sep)[1:])
+
+  # generate and store category summary
+  base = tree_src['_meta']['base'] if sep == tree_src['_meta']['base'][-1] else tree_src['_meta']['base'] + sep
+  link_url = base + subpath + sep
+  lines_rss_0 = [
+    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
+    '  <channel>',
+    f'    <title>{subpath}</title>',
+    f'    <generator>{generator}</generator>',
+    f'    <lastBuildDate>{datetime_now_rfc822}</lastBuildDate>',
+    f'    <link>{link_url}</link>',
+    f'    <atom:link type="application/rss+xml" href="{link_url + "index.xml"}" rel="self"/>'
+  ]
+  if 'language'  in tree_src['_meta']: lines_rss_0.append(get_line_xml('language',  tree_src['_meta']['language'],  4))
+  if 'copyright' in tree_src['_meta']: lines_rss_0.append(get_line_xml('copyright', tree_src['_meta']['copyright'], 4))
+  lines_rss_1 = [
+    '  </channel>',
+    '</rss>'
+  ]
+
+  tree_src_lvl = read_by_path(tree_src, item_path)
+  content_files = list(map(lambda item_name: tree_src_lvl[item_name], filter(lambda item_name: check_file_md(item_name), tree_src_lvl)))
+  content_files_sorted = sorted(content_files, key = lambda file: file['date'], reverse = True)
+  for content_file in content_files_sorted:
+
+    # generate and include item summary
+    lines_item_0 = [
+      '    <item>'
+    ]
+    if 'title' in content_file: lines_item_0.append(get_line_xml('title', content_file['title'], 6))
+    if 'description' in content_file: lines_item_0.append(get_line_xml('description', content_file['description'], 6))
+    if 'datetime-rfc822' in content_file: lines_item_0.append(get_line_xml('pubDate', content_file['datetime-rfc822'], 6))
+
+    link_url = base + content_file["url"]
+    lines_item_1 = [
+      f'      <link>{link_url}</link>',
+      f'      <guid>{link_url}</guid>',
+      '    </item>'
+    ]
+    lines_rss_0.append('\n'.join([*lines_item_0, *lines_item_1]))
+
+  content = '\n'.join([*lines_rss_0, *lines_rss_1])
+  tree_src = write_by_path(tree_src, sep.join(['static', subpath, 'index.xml']), content)
+
+  return tree_src
 
 
 # WORKFLOWS
@@ -822,7 +888,7 @@ def generate_list(list_base_path, tree_src, tag = None):
   index, indent, number = itemgetter('index', 'indent', 'number')(line['tag_values']) # number taken as number per list page
 
   # add subpath part if list for tag
-  subpath = sep.join([subpath, output_dir_tags_name, url_part_prepare(tag)]) if tag else subpath
+  subpath = sep.join([subpath, output_dir_tags_name, get_as_url_part(tag)]) if tag else subpath
 
   for i in range(len(list_page_names)):
 
@@ -974,8 +1040,6 @@ finalise_content = prime_workflow(
 
 # workflow: generate_site
 
-# define key tasks
-
 def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
 
   tree_src = {}
@@ -1003,6 +1067,13 @@ def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
 
     tree_src[item_name] = get_source_file(item_path)
 
+  return tree_src
+
+def parse_tino_tags(tree_src):
+  index_lines = tree_src['static']['index.html']
+  index_lines_filtered = list(filter(pull_meta_pairs, index_lines))
+  tree_src['static']['index.html'] = index_lines_filtered
+  tree_src['_meta'] = tino_meta_pairs
   return tree_src
 
 def prepare_content(tree_src, root = 'content'):
@@ -1042,21 +1113,6 @@ def insert_partials(tree_src, root = '.'):
       tree_src = complete_base(item_path, tree_src)
   return tree_src
 
-def pull_meta_pairs(line):
-  tino_meta_tag_name_i = line.find(tino_meta_tag_name)
-  if -1 == tino_meta_tag_name_i: return True
-  line_remainder = line[tino_meta_tag_name_i + len(tino_meta_tag_name):]
-  key = search(escape(tino_meta_tag_attr_key) + r'="(.*?)"', line_remainder).groups()[0]
-  val = search(escape(tino_meta_tag_attr_val) + r'="(.*?)"', line_remainder).groups()[0]
-  tino_meta_pairs[key] = val
-  return False
-
-def parse_tino_tags(tree_src):
-  index_lines = tree_src['static']['index.html']
-  index_lines_filtered = list(filter(pull_meta_pairs, index_lines))
-  tree_src['static']['index.html'] = index_lines_filtered
-  return tree_src
-
 def include_content(tree_src, root = '.'):
 
   # handle items skipped
@@ -1077,58 +1133,6 @@ def include_content(tree_src, root = '.'):
       tree_src = generate_pages(item_path, tree_src)
     if check_file_list(item_name):
       tree_src = generate_lists(item_path, tree_src)
-
-  return tree_src
-
-def get_line_xml(tag_name, content, indent = 0):
-  return get_with_indent(f'<{tag_name}>{content}</{tag_name}>', indent)
-
-def generate_rss_xml(item_path, tree_src):
-
-  subpath = sep.join(item_path.split(sep)[1:])
-
-  # generate and store category summary
-  base = tino_meta_pairs['base'] if sep == tino_meta_pairs['base'][-1] else tino_meta_pairs['base'] + sep
-  link_url = base + subpath + sep
-  lines_rss_0 = [
-    '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
-    '  <channel>',
-    f'    <title>{subpath}</title>',
-    f'    <generator>{generator}</generator>',
-    f'    <lastBuildDate>{datetime_now_rfc822}</lastBuildDate>',
-    f'    <link>{link_url}</link>',
-    f'    <atom:link type="application/rss+xml" href="{link_url + "index.xml"}" rel="self"/>'
-  ]
-  if 'language'  in tino_meta_pairs: lines_rss_0.append(get_line_xml('language',  tino_meta_pairs['language'],  4))
-  if 'copyright' in tino_meta_pairs: lines_rss_0.append(get_line_xml('copyright', tino_meta_pairs['copyright'], 4))
-  lines_rss_1 = [
-    '  </channel>',
-    '</rss>'
-  ]
-
-  tree_src_lvl = read_by_path(tree_src, item_path)
-  content_files = list(map(lambda item_name: tree_src_lvl[item_name], filter(lambda item_name: check_file_md(item_name), tree_src_lvl)))
-  content_files_sorted = sorted(content_files, key = lambda file: file['date'], reverse = True)
-  for content_file in content_files_sorted:
-
-    # generate and include item summary
-    lines_item_0 = [
-      '    <item>'
-    ]
-    if 'title' in content_file: lines_item_0.append(get_line_xml('title', content_file['title'], 6))
-    if 'description' in content_file: lines_item_0.append(get_line_xml('description', content_file['description'], 6))
-    if 'datetime-rfc822' in content_file: lines_item_0.append(get_line_xml('pubDate', content_file['datetime-rfc822'], 6))
-
-    link_url = base + content_file["url"]
-    lines_item_1 = [
-      f'      <link>{link_url}</link>',
-      f'      <guid>{link_url}</guid>',
-      '    </item>'
-    ]
-    lines_rss_0.append('\n'.join([*lines_item_0, *lines_item_1]))
-
-  content = '\n'.join([*lines_rss_0, *lines_rss_1])
-  tree_src = write_by_path(tree_src, sep.join(['static', subpath, 'index.xml']), content)
 
   return tree_src
 
@@ -1173,9 +1177,9 @@ def persist_as_json(tree_src):
 
 generate_site = prime_workflow(
   get_source_tree,
+  parse_tino_tags,
   prepare_content,
   insert_partials,
-  parse_tino_tags,
   include_content,
   collate_rss_xml,
   output_complete,
@@ -1200,12 +1204,16 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
   return False
 
 
-# INITIATION
+# initiation
+
+# - BUILD
 
 generate_site()
 
 if not is_live:
   exit()
+
+# - SERVE
 
 print(f'View site at localhost:{server_port} | Press Ctrl+C here to stop')
 pid = None
