@@ -10,19 +10,26 @@
 #   - key-value pair handlers
 #
 # - ACTIVITY
-#   - utility functions (incl. prime_workflow)
+#   - utilities (incl. prime_workflow)
 #   - processors
 #   - WORKFLOWS
 #     - ...
-#     - generate_site
-#       - get_source_tree (tree_src = {'content':{'_map':{},'<category>':{'<file>':'...', ...}, ...},'partials':{...},'static':{...}})
-#       - parse_tino_tags (        -> {..., 'static':{'index.html':'...', ...}})
-#       - prepare_content (        -> {'content':{..., '_tag_set':[...],'<category>':{'<file>':{...}, ...}, ...}, ...})
-#       - insert_partials (        -> {..., 'static':{...}})
-#       - include_content (        -> {..., 'static':{'<category>':{'tags':{...}, ...}, ...}})
-#       - collate_rss_xml (        -> {..., 'static':{'<category>':{'index.xml':'...', ...}, ...}})
-#       - output_complete
+#     - generate_site_full/part
+#       - get_source_tree   (tree_src = {'content':{'_map':{},'<category>':{'<file>':'...', ...}, ...},'partials':{...},'static':{...}})
+#       - unpack_source_full
+#         - parse_tino_tags (        -> {'_meta_pairs':{...}, ..., 'static':{'index.html':'...', ...}})
+#         - prepare_content (        -> {..., 'content':{..., '_tag_set':[...],'<category>':{'<file>':{...}, ...}, ...}, ...})
+#       - unpack_source_part
+#         - parse_tino_tags (           ... )
+#       - extend_static
+#         - insert_partials (        -> {..., 'static':{...}})
+#         - include_content (        -> {..., 'static':{'<category>':{'tags':{...}, ...}, ...}})
+#         - collate_rss_xml (        -> {..., 'static':{'<category>':{'index.xml':'...', ...}, ...}})
+#       - produce_files
+#         - output_complete
+#         - persist_as_json (        -> {..., '_temp':{'mtimes': {...}}, ...})
 #   - initiation
+#     - ...
 #     - BUILD
 #     - poss. SERVE
 
@@ -40,7 +47,7 @@ from re import escape, search, sub
 from functools import reduce
 from email import utils
 from copy import deepcopy
-from json import dump
+from json import load, dump
 #   - for server option
 from sys import exit
 from subprocess import Popen, signal
@@ -165,7 +172,7 @@ pairs_item_tag = {
 
 # ACTIVITY
 
-# define utilities
+# utilities
 
 # - source file handling
 
@@ -309,9 +316,9 @@ def get_output_url_values(path, to_save = False):
   path_full_new = sep.join([path_bare_new, 'index.html']) if to_save else path_bare_new + sep
   return (is_feature, path_bare_new, path_full_new)
 
-def output_lines(path, content):
+def output_lines(path_base, content):
   output_dir_root_name_local = output_dir_root_name
-  (is_feature, path_bare, path_full) = get_output_url_values(path, True)
+  (is_feature, path_bare, path_full) = get_output_url_values(path_base, True)
   if is_beta:
     output_dir_root_name_local = output_dir_root_name_local + sep + 'beta'
     handle_mkdir(output_dir_root_name)
@@ -338,7 +345,7 @@ def prime_workflow(*functions):
   return flow
 
 
-# define processors
+# processors
 
 # - meta pair extraction
 
@@ -542,7 +549,7 @@ def generate_rss_xml(item_path, tree_src):
   subpath = sep.join(item_path.split(sep)[1:])
 
   # generate and store category summary
-  base = tree_src['_meta']['base'] if sep == tree_src['_meta']['base'][-1] else tree_src['_meta']['base'] + sep
+  base = tree_src['_meta_pairs']['base'] if sep == tree_src['_meta_pairs']['base'][-1] else tree_src['_meta_pairs']['base'] + sep
   link_url = base + subpath + sep
   lines_rss_0 = [
     '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">',
@@ -553,8 +560,8 @@ def generate_rss_xml(item_path, tree_src):
     f'    <link>{link_url}</link>',
     f'    <atom:link type="application/rss+xml" href="{link_url + "index.xml"}" rel="self"/>'
   ]
-  if 'language'  in tree_src['_meta']: lines_rss_0.append(get_line_xml('language',  tree_src['_meta']['language'],  4))
-  if 'copyright' in tree_src['_meta']: lines_rss_0.append(get_line_xml('copyright', tree_src['_meta']['copyright'], 4))
+  if 'language'  in tree_src['_meta_pairs']: lines_rss_0.append(get_line_xml('language',  tree_src['_meta_pairs']['language'],  4))
+  if 'copyright' in tree_src['_meta_pairs']: lines_rss_0.append(get_line_xml('copyright', tree_src['_meta_pairs']['copyright'], 4))
   lines_rss_1 = [
     '  </channel>',
     '</rss>'
@@ -1038,7 +1045,7 @@ finalise_content = prime_workflow(
 )
 
 
-# workflow: generate_site
+# workflows: generate_site_full/part
 
 def get_source_tree(dirs = ['partials', 'content', 'static'], root = '.'):
 
@@ -1073,7 +1080,7 @@ def parse_tino_tags(tree_src):
   index_lines = tree_src['static']['index.html']
   index_lines_filtered = list(filter(pull_meta_pairs, index_lines))
   tree_src['static']['index.html'] = index_lines_filtered
-  tree_src['_meta'] = tino_meta_pairs
+  tree_src['_meta_pairs'] = tino_meta_pairs
   return tree_src
 
 def prepare_content(tree_src, root = 'content'):
@@ -1172,19 +1179,79 @@ def output_complete(tree_src, root = 'static'):
   return tree_src
 
 def persist_as_json(tree_src):
+  tree_src['_temp'] = {'mtimes': tree_src_mtimes} if '_temp' not in tree_src else tree_src['_temp'].update({'mtimes': tree_src_mtimes})
   with open(tino_file_tree_name, 'w') as f:
     dump(tree_src, f , ensure_ascii=False)
 
-generate_site = prime_workflow(
-  get_source_tree,
+# utility workflows
+
+unpack_source_full = prime_workflow(
   parse_tino_tags,
-  prepare_content,
+  prepare_content
+)
+
+unpack_source_part = prime_workflow(
+  parse_tino_tags
+)
+
+extend_static = prime_workflow(
   insert_partials,
   include_content,
-  collate_rss_xml,
+  collate_rss_xml
+)
+
+produce_files = prime_workflow(
   output_complete,
   persist_as_json
 )
+
+# primary workflows
+
+generate_site_full = prime_workflow(
+  unpack_source_full,
+  extend_static,
+  produce_files
+)
+
+generate_site_part = prime_workflow(
+  unpack_source_part,
+  extend_static,
+  produce_files
+)
+
+
+# initiation
+
+# utilities
+
+def get_tree_src_temp():
+  if not path.exists(tino_file_tree_name): return {'_temp':{'mtimes':{}}}
+  with open(tino_file_tree_name, 'r') as f:
+    return load(f)
+
+def get_tree_src_mtimes(dirs = ['partials', 'content', 'static'], root = '.'):
+
+  tree_src_mtimes = {}
+
+  for item_name in dirs:
+
+    # handle items skipped
+    if 'content' == item_name and exclude_content: continue
+    if item_name in [shared_media_dir_name_static, shared_media_dir_name_content]: continue
+    if '.' == item_name[0]: continue
+
+    item_path = get_source_path(root, item_name)
+    # handle item nesting
+    if path.isdir(item_path):
+      # handle subpath mapping
+      if ':' in item_name:
+        (_, item_name) = get_path_map({}, item_name)
+      tree_src_mtimes.update(get_tree_src_mtimes(listdir(item_path), item_path)) # recurse
+      continue
+
+    tree_src_mtimes[item_path] = path.getmtime(item_path)
+
+  return tree_src_mtimes
 
 def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'static'], root = '.'):
   for item_name in dirs:
@@ -1203,17 +1270,55 @@ def check_source_updated(time_secs_current, dirs = ['partials', 'content', 'stat
       return True
   return False
 
+# primaries
 
-# initiation
+def update_tree_src_mtimes():
 
-# - BUILD
+  global tree_src_temp
+  global tree_src_temp_mtimes
+  global tree_src_mtimes
 
-generate_site()
+  tree_src_temp        = get_tree_src_temp()
+  tree_src_temp_mtimes = tree_src_temp['_temp']['mtimes']
+  tree_src_mtimes      = get_tree_src_mtimes()
+
+def manage_site_generation():
+
+  if 0 == len(tree_src_temp_mtimes):
+    # site generation required - no persisted tree_src
+    tree_src = get_source_tree()
+    generate_site_full(tree_src)
+
+  elif tree_src_temp_mtimes != tree_src_mtimes:
+    # site generation required - current source tree and persisted tree_src differ
+    tree_src = get_source_tree()
+
+    # compare content listings
+    tree_src_temp_mtimes_content = {k: v for k, v in tree_src_temp_mtimes.items() if 0 == k.find('content')}
+    tree_src_mtimes_content = {k: v for k, v in tree_src_mtimes.items() if 0 == k.find('content')}
+    if tree_src_temp_mtimes_content == tree_src_mtimes_content:
+      # generate part - use current source tree with pre-prepared content from persisted tree_src
+      tree_src['content'] = tree_src_temp['content']
+      generate_site_part(tree_src)
+
+    else:
+      # generate full - from current source tree
+      generate_site_full(tree_src)
+
+  else:
+    # output only - from persisted tree_src
+    output_complete(tree_src_temp)
+
+
+# BUILD
+
+update_tree_src_mtimes()
+manage_site_generation()
 
 if not is_live:
   exit()
 
-# - SERVE
+# SERVE
 
 print(f'View site at localhost:{server_port} | Press Ctrl+C here to stop')
 pid = None
@@ -1226,7 +1331,8 @@ try:
     is_updated = check_source_updated(time_secs_current)
     if is_updated:
       print(f'Source modified - updating {output_dir_root_name}/')
-      generate_site()
+      update_tree_src_mtimes()
+      manage_site_generation()
     try:
       with open(f'./{output_dir_root_name}/{tino_file_live_name}', 'w') as f:
         f.write('update' if is_updated else '')
