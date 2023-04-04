@@ -47,14 +47,21 @@ Generate via CLI a website from a set of three source directories, producing com
 
 ## Todo
 
-- revise site generation for subset processing via diff with persisted JSON
-- revise live serving update check for use of absolute time
-- memoise completed partial filenames
-- allow for content category description line in RSS XML files
-- allow use of content file tag value in template file subpath
-- extend use of path tag to other nested files
+- further reduce site generation time:
+  - diff more fully per persisted JSON:
+    - process decreased subset
+    - output only required and changed
+  - memoise completed partial insertions
+- revise live serving update check for existing code reuse
+- extend functionality:
+  - allow for content category description line in RSS XML files
+  - allow use of content file tag value in template file subpath
+  - extend use of path tag to other nested files
 - replace use of subprocess for server and revise live server file to endpoint
-- refactor, add docstrings with interactive examples and comment
+- otherwise improve generator source code:
+  - further refactor
+  - add docstrings with interactive examples
+  - extend commenting
 - improve this readme
 
 ## Code
