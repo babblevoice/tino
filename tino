@@ -277,7 +277,22 @@ def get_for_output(line, subpath):
   return line.replace(tag_path, tag_path + get_depth_part(subpath))
 
 def get_with_indent(line, size):
-  return line if '' == line.strip() else ' ' * size + line
+  # track if we are inside a <pre> block
+  if not hasattr(get_with_indent, "in_pre_block"):
+    get_with_indent.in_pre_block = False
+
+  do_not_indent = '' == line.strip() or get_with_indent.in_pre_block
+
+  if '<pre' in line:
+    get_with_indent.in_pre_block = True
+  elif '</pre' in line:
+    get_with_indent.in_pre_block = False
+    return line
+
+  if do_not_indent:
+    return line
+  else:
+    return ' ' * size + line
 
 def get_line_xml(tag_name, content, indent = 0):
   return get_with_indent(f'<{tag_name}>{content}</{tag_name}>', indent)
