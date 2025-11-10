@@ -253,6 +253,7 @@ The following dependencies are used:
 - Python 3
 - [Python-Markdown](https://github.com/Python-Markdown/markdown)
 - [css-html-js-minify](https://github.com/juancarlospaco/css-html-js-minify)
+- [Pygments](github.com/pygments/pygments)
 
 The tino root directory requires the three default source directories - content/, partials/ and static/.
 
