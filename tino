@@ -337,6 +337,7 @@ def output_lines(path_base, content):
   if is_beta:
     output_dir_root_name_local = output_dir_root_name_local + sep + 'beta'
     handle_mkdir(output_dir_root_name)
+    content = content.replace("</head>", '  <meta name="robots" content="noindex">\n  </head>')
   if is_feature:
     handle_mkdir(output_dir_root_name_local + sep + path_bare)
   source_path = get_source_path(output_dir_root_name_local, path_full)
